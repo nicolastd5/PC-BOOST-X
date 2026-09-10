@@ -645,7 +645,7 @@ public partial class GameProfilesViewModel : ObservableObject
         {
             try
             {
-                var path = await CoverService.ResolveCoverPathAsync(g.Name);
+                var path = await CoverService.ResolveCoverPathAsync(g);
                 await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => g.CoverPath = path)!;
                 if (path.Contains("\\covers\\", StringComparison.OrdinalIgnoreCase) &&
                     !Path.GetFileName(path).StartsWith("fb_", StringComparison.OrdinalIgnoreCase))

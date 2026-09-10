@@ -10,6 +10,7 @@ public partial class GameProfile : ObservableObject
     public required string ExecutablePath { get; init; }
     public string Platform { get; init; } = "Desconhecido";
     public string? AppId { get; init; }
+    public int? SteamAppId { get; set; }
     public string RecommendationKey { get; init; } = "casual";
 
     [ObservableProperty]

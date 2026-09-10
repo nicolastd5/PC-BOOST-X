@@ -458,17 +458,40 @@ public static class GameProfileService
     {
         try
         {
+            var commonDirs = new List<string>();
+
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+                var steamPath = key?.GetValue("SteamPath")?.ToString()?.Replace('/', '\\');
+                if (!string.IsNullOrEmpty(steamPath))
+                {
+                    commonDirs.Add(Path.Combine(steamPath, "steamapps", "common"));
+                    var vdf = Path.Combine(steamPath, "steamapps", "libraryfolders.vdf");
+                    if (File.Exists(vdf))
+                    {
+                        foreach (Match m in Regex.Matches(File.ReadAllText(vdf), "\"path\"\\s+\"([^\"]+)\""))
+                        {
+                            var lib = m.Groups[1].Value.Replace("\\\\", "\\");
+                            commonDirs.Add(Path.Combine(lib, "steamapps", "common"));
+                        }
+                    }
+                }
+            }
+            catch { }
+
             foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
             {
-                foreach (var common in new[]
-                         {
-                             Path.Combine(drive.Name, "SteamLibrary", "steamapps", "common"),
-                             Path.Combine(drive.Name, "Steam", "steamapps", "common"),
-                             Path.Combine(drive.Name, "Program Files (x86)", "Steam", "steamapps", "common"),
-                             Path.Combine(drive.Name, "Program Files", "Steam", "steamapps", "common"),
-                         })
-                {
-                    if (!Directory.Exists(common)) continue;
+                commonDirs.Add(Path.Combine(drive.Name, "SteamLibrary", "steamapps", "common"));
+                commonDirs.Add(Path.Combine(drive.Name, "Steam", "steamapps", "common"));
+                commonDirs.Add(Path.Combine(drive.Name, "Jogos", "steamapps", "common"));
+                commonDirs.Add(Path.Combine(drive.Name, "Program Files (x86)", "Steam", "steamapps", "common"));
+                commonDirs.Add(Path.Combine(drive.Name, "Program Files", "Steam", "steamapps", "common"));
+            }
+
+            foreach (var common in commonDirs.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!Directory.Exists(common)) continue;
 
                     var acfDir = Path.GetDirectoryName(common)!;
                     foreach (var acf in Directory.EnumerateFiles(acfDir, "*.acf"))
@@ -479,6 +502,17 @@ public static class GameProfileService
                             var nameMatch = Regex.Match(text, "\"name\"\\s+\"([^\"]+)\"");
                             if (!nameMatch.Success) continue;
                             var gameName = nameMatch.Groups[1].Value;
+
+                            int? steamAppId = null;
+                            var appIdMatch = Regex.Match(text, "\"appid\"\\s+\"?(\\d+)\"?");
+                            if (appIdMatch.Success && int.TryParse(appIdMatch.Groups[1].Value, out var parsedId))
+                                steamAppId = parsedId;
+                            else
+                            {
+                                var fileMatch = Regex.Match(Path.GetFileNameWithoutExtension(acf), @"(\d+)$");
+                                if (fileMatch.Success && int.TryParse(fileMatch.Groups[1].Value, out var fromFile))
+                                    steamAppId = fromFile;
+                            }
 
                             // Procura .exe na pasta do jogo
                             var installDirMatch = Regex.Match(text, "\"installdir\"\\s+\"([^\"]+)\"");
@@ -515,7 +549,8 @@ public static class GameProfileService
                                     Name = display,
                                     ExecutablePath = exe,
                                     Platform = "Steam",
-                                    RecommendationKey = recKey
+                                    RecommendationKey = recKey,
+                                    SteamAppId = steamAppId
                                 };
                                 break; // um exe principal por ACF
                             }
@@ -523,7 +558,6 @@ public static class GameProfileService
                         catch { }
                     }
                 }
-            }
         }
         catch { }
     }

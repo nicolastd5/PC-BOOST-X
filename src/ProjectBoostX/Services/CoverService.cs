@@ -119,39 +119,49 @@ public static class CoverService
         catch { return false; }
     }
 
-    /// <summary>Resolve caminho de arquivo de capa (Steam ou fallback) para o binding da UI.</summary>
-    public static Task<string> ResolveCoverPathAsync(string gameName, CancellationToken ct = default)
+    /// <summary>Resolve capa: AppId do perfil → API loja Steam → arte local → gradiente.</summary>
+    public static Task<string> ResolveCoverPathAsync(Models.GameProfile game, CancellationToken ct = default)
     {
         return Task.Run(async () =>
         {
             try
             {
-                var steam = await EnsureCoverAsync(gameName, ct).ConfigureAwait(false);
+                var steam = await DownloadSteamCoverAsync(game.Name, game.SteamAppId, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(steam) && File.Exists(steam))
                 {
-                    Log($"OK steam {gameName} -> {steam} ({new FileInfo(steam).Length}b)");
+                    Log($"OK steam {game.Name} appid={game.SteamAppId} -> {steam}");
                     return steam;
                 }
-                Log($"FALLBACK {gameName}");
+
+                var local = TryFindLocalCover(game.ExecutablePath);
+                if (local is not null)
+                {
+                    Log($"OK local {game.Name} -> {local}");
+                    var dest = Path.Combine(CoverDir, $"loc_{SafeName(game.Name)}.jpg");
+                    File.Copy(local, dest, overwrite: true);
+                    return dest;
+                }
+
+                Log($"FALLBACK {game.Name} appid={game.SteamAppId}");
             }
             catch (Exception ex)
             {
-                Log($"ERR {gameName}: {ex.Message}");
+                Log($"ERR {game.Name}: {ex.Message}");
             }
 
-            // Fallback em thread de UI (RenderTargetBitmap é frágil fora de STA)
             if (System.Windows.Application.Current?.Dispatcher is { } disp && !disp.CheckAccess())
-            {
-                return await disp.InvokeAsync(() => EnsureFallbackCoverFile(gameName));
-            }
-            return EnsureFallbackCoverFile(gameName);
+                return await disp.InvokeAsync(() => EnsureFallbackCoverFile(game.Name));
+            return EnsureFallbackCoverFile(game.Name);
         });
     }
 
-    /// <summary>Garante arquivo de capa local. Retorna caminho ou null se falhar (UI usa fallback).</summary>
-    public static async Task<string?> EnsureCoverAsync(string gameName, CancellationToken ct = default)
+    private static string SafeName(string name)
+        => string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+
+    /// <summary>Baixa header da API da loja (URLs com hash dos jogos novos) e fallback CDN direto.</summary>
+    public static async Task<string?> DownloadSteamCoverAsync(string gameName, int? appId, CancellationToken ct)
     {
-        var appId = TryGetSteamAppId(gameName, "");
+        appId ??= TryGetSteamAppId(gameName, "");
         if (appId is null) return null;
 
         var path = Path.Combine(CoverDir, $"{appId}.jpg");
@@ -162,43 +172,112 @@ public static class CoverService
             try { File.Delete(path); } catch { }
         }
 
-        // library_600x900 (retrato, melhor no card Netflix) antes do header paisagem
-        string[] urls =
-        [
-            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg",
-            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
-            $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
-            $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/library_600x900.jpg",
-            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
-            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg",
-            $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/header.jpg",
-            $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/header.jpg",
-        ];
+        // 1) API oficial — único jeito confiável em jogos novos (store_item_assets com hash)
+        var apiUrl = await FetchSteamHeaderUrlAsync(appId.Value, ct).ConfigureAwait(false);
+        var urls = new List<string>();
+        if (!string.IsNullOrEmpty(apiUrl))
+            urls.Add(apiUrl);
+
+        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg");
+        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
+        urls.Add($"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg");
+        urls.Add($"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg");
 
         foreach (var url in urls)
         {
             try
             {
                 ct.ThrowIfCancellationRequested();
+                Log($"GET {gameName} {url}");
                 using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
                     .ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode) continue;
-                var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-                if (bytes.Length < 4000) continue;
-                // JPEG FF D8 ou PNG 89 50
-                if (!(bytes[0] == 0xFF && bytes[1] == 0xD8) && !(bytes[0] == 0x89 && bytes[1] == 0x50))
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Log($"  HTTP {(int)resp.StatusCode}");
                     continue;
+                }
+                var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+                if (bytes.Length < 4000)
+                {
+                    Log($"  too small {bytes.Length}");
+                    continue;
+                }
+                if (!(bytes[0] == 0xFF && bytes[1] == 0xD8) && !(bytes[0] == 0x89 && bytes[1] == 0x50))
+                {
+                    Log($"  bad magic {bytes[0]:X2}{bytes[1]:X2}");
+                    continue;
+                }
                 await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
                 return path;
             }
-            catch
+            catch (Exception ex)
             {
-                // tenta próxima URL
+                Log($"  fail {ex.Message}");
             }
         }
 
         return null;
     }
+
+    private static async Task<string?> FetchSteamHeaderUrlAsync(int appId, CancellationToken ct)
+    {
+        try
+        {
+            using var resp = await Http.GetAsync(
+                $"https://store.steampowered.com/api/appdetails?appids={appId}&filters=basic",
+                ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty(appId.ToString(), out var entry)) return null;
+            if (!entry.TryGetProperty("success", out var ok) || !ok.GetBoolean()) return null;
+            if (!entry.TryGetProperty("data", out var data)) return null;
+            if (data.TryGetProperty("header_image", out var hi))
+                return hi.GetString();
+        }
+        catch (Exception ex)
+        {
+            Log($"api err {appId}: {ex.Message}");
+        }
+        return null;
+    }
+
+    /// <summary>Procura key-art no diretório do jogo (Epic/standalone sem CDN).</summary>
+    private static string? TryFindLocalCover(string exePath)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(exePath);
+            if (dir is null || !Directory.Exists(dir)) return null;
+
+            var roots = new List<string> { dir };
+            // sobe 1–2 níveis (comum/Wardogs → comum)
+            try { var p = Path.GetDirectoryName(dir); if (p is not null) roots.Add(p); } catch { }
+
+            foreach (var root in roots)
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.TopDirectoryOnly))
+                {
+                    var ext = Path.GetExtension(file).ToLowerInvariant();
+                    if (ext is not (".jpg" or ".jpeg" or ".png")) continue;
+                    var fi = new FileInfo(file);
+                    if (fi.Length < 40_000 || fi.Length > 8_000_000) continue;
+                    var n = Path.GetFileName(file).ToLowerInvariant();
+                    if (n.Contains("logo") || n.Contains("icon") || n.Contains("splash") ||
+                        n.Contains("keyart") || n.Contains("key_art") || n.Contains("cover") ||
+                        n.Contains("header") || n.Contains("capsule"))
+                        return file;
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>Garante arquivo de capa local por nome (compat).</summary>
+    public static async Task<string?> EnsureCoverAsync(string gameName, CancellationToken ct = default)
+        => await DownloadSteamCoverAsync(gameName, null, ct).ConfigureAwait(false);
 
     public static async Task PrefetchCoversAsync(
         IEnumerable<string> gameNames,
