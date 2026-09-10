@@ -137,9 +137,9 @@ public static class CoverService
                 if (local is not null)
                 {
                     Log($"OK local {game.Name} -> {local}");
-                    var dest = Path.Combine(CoverDir, $"loc_{SafeName(game.Name)}.jpg");
-                    File.Copy(local, dest, overwrite: true);
-                    return dest;
+                    var dest = ImportLocalCover(local, game.Name);
+                    if (dest is not null && File.Exists(dest))
+                        return dest;
                 }
 
                 Log($"FALLBACK {game.Name} appid={game.SteamAppId}");
@@ -252,27 +252,94 @@ public static class CoverService
             if (dir is null || !Directory.Exists(dir)) return null;
 
             var roots = new List<string> { dir };
-            // sobe 1–2 níveis (comum/Wardogs → comum)
-            try { var p = Path.GetDirectoryName(dir); if (p is not null) roots.Add(p); } catch { }
-
-            foreach (var root in roots)
+            var cursor = dir;
+            for (var i = 0; i < 3; i++)
             {
-                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.TopDirectoryOnly))
+                cursor = Path.GetDirectoryName(cursor);
+                if (cursor is null) break;
+                roots.Add(cursor);
+                foreach (var sub in new[] { "Content\\Splash", "Splash", "SplashScreen", "Media" })
                 {
-                    var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (ext is not (".jpg" or ".jpeg" or ".png")) continue;
-                    var fi = new FileInfo(file);
-                    if (fi.Length < 40_000 || fi.Length > 8_000_000) continue;
-                    var n = Path.GetFileName(file).ToLowerInvariant();
-                    if (n.Contains("logo") || n.Contains("icon") || n.Contains("splash") ||
-                        n.Contains("keyart") || n.Contains("key_art") || n.Contains("cover") ||
-                        n.Contains("header") || n.Contains("capsule"))
-                        return file;
+                    var p = Path.Combine(cursor, sub);
+                    if (Directory.Exists(p)) roots.Add(p);
                 }
             }
+
+            var preferred = new List<string>();
+            var others = new List<string>();
+
+            foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                IEnumerable<string> files;
+                try { files = Directory.EnumerateFiles(root, "*.*", SearchOption.TopDirectoryOnly); }
+                catch { continue; }
+
+                foreach (var file in files)
+                {
+                    var ext = Path.GetExtension(file).ToLowerInvariant();
+                    if (ext is not (".jpg" or ".jpeg" or ".png" or ".bmp")) continue;
+                    FileInfo fi;
+                    try { fi = new FileInfo(file); } catch { continue; }
+                    if (fi.Length < 40_000 || fi.Length > 8_000_000) continue;
+                    var n = Path.GetFileName(file).ToLowerInvariant();
+                    if (n.Contains("logo") || n.Contains("icon") || n.Contains("eac") ||
+                        n.Contains("easyanticheat") || n.Contains("cef"))
+                        continue;
+
+                    if (n.Contains("splash") || n.Contains("keyart") || n.Contains("key_art") ||
+                        n.Contains("cover") || n.Contains("header") || n.Contains("capsule") ||
+                        n.Contains("art"))
+                        preferred.Add(file);
+                    else if (fi.Length > 150_000)
+                        others.Add(file);
+                }
+            }
+
+            return preferred.OrderByDescending(f => new FileInfo(f).Length).FirstOrDefault()
+                   ?? others.OrderByDescending(f => new FileInfo(f).Length).FirstOrDefault();
         }
-        catch { }
-        return null;
+        catch { return null; }
+    }
+
+    /// <summary>Copia/converte arte local para PNG no cache (BMP do Fortnite incluído).</summary>
+    private static string? ImportLocalCover(string source, string gameName)
+    {
+        try
+        {
+            var dest = Path.Combine(CoverDir, $"loc_{SafeName(gameName)}.png");
+            var ext = Path.GetExtension(source).ToLowerInvariant();
+            if (ext is ".jpg" or ".jpeg" or ".png")
+            {
+                File.Copy(source, dest, overwrite: true);
+                return dest;
+            }
+
+            // BMP e outros: decodifica e grava PNG na thread de UI
+            Action convert = () =>
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.UriSource = new Uri(source, UriKind.Absolute);
+                bmp.EndInit();
+                bmp.Freeze();
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bmp));
+                using var fs = File.Create(dest);
+                encoder.Save(fs);
+            };
+
+            if (System.Windows.Application.Current?.Dispatcher is { } disp && !disp.CheckAccess())
+                disp.Invoke(convert);
+            else
+                convert();
+            return dest;
+        }
+        catch (Exception ex)
+        {
+            Log($"import local fail {gameName}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>Garante arquivo de capa local por nome (compat).</summary>
