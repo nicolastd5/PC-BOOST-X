@@ -11,10 +11,16 @@ namespace BoostParaPc.Services;
 /// </summary>
 public static class CoverService
 {
-    private static readonly HttpClient Http = new()
+    private static readonly HttpClient Http = CreateClient();
+
+    private static HttpClient CreateClient()
     {
-        Timeout = TimeSpan.FromSeconds(8)
-    };
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        c.DefaultRequestHeaders.Accept.ParseAdd("image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+        return c;
+    }
 
     // Nome do jogo → Steam AppId (quando existe na Steam)
     private static readonly Dictionary<string, int> SteamAppIds = new(StringComparer.OrdinalIgnoreCase)
@@ -89,6 +95,38 @@ public static class CoverService
         return null;
     }
 
+    private static void Log(string msg)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(Path.GetTempPath(), "projectboostx-covers.log"),
+                $"{DateTime.Now:HH:mm:ss} {msg}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
+    /// <summary>Resolve caminho de arquivo de capa (Steam ou fallback) para o binding da UI.</summary>
+    public static async Task<string> ResolveCoverPathAsync(string gameName, CancellationToken ct = default)
+    {
+        try
+        {
+            var steam = await EnsureCoverAsync(gameName, ct).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(steam) && File.Exists(steam))
+            {
+                Log($"OK steam {gameName} -> {steam} ({new FileInfo(steam).Length}b)");
+                return steam;
+            }
+            Log($"FALLBACK {gameName}");
+        }
+        catch (Exception ex)
+        {
+            Log($"ERR {gameName}: {ex.Message}");
+        }
+
+        return EnsureFallbackCoverFile(gameName);
+    }
+
     /// <summary>Garante arquivo de capa local. Retorna caminho ou null se falhar (UI usa fallback).</summary>
     public static async Task<string?> EnsureCoverAsync(string gameName, CancellationToken ct = default)
     {
@@ -99,11 +137,15 @@ public static class CoverService
         if (File.Exists(path) && new FileInfo(path).Length > 2000)
             return path;
 
+        // header.jpg é o asset estável da loja; library_600x900 nem sempre existe
         string[] urls =
         [
-            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
-            $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
             $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg",
+            $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/header.jpg",
+            $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/header.jpg",
+            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
+            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg",
         ];
 
         foreach (var url in urls)
@@ -115,7 +157,9 @@ public static class CoverService
                     .ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode) continue;
                 var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-                if (bytes.Length < 2000) continue;
+                if (bytes.Length < 1500) continue;
+                // JPEG/PNG magic
+                if (bytes[0] != 0xFF && bytes[0] != 0x89) continue;
                 await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
                 return path;
             }
@@ -142,9 +186,14 @@ public static class CoverService
         }
     }
 
-    /// <summary>Gradiente determinístico + iniciais para jogos sem logo baixada.</summary>
-    public static ImageSource CreateFallbackCover(string gameName)
+    /// <summary>Gradiente + iniciais. Também grava PNG no cache para a UI carregar por path.</summary>
+    public static string EnsureFallbackCoverFile(string gameName)
     {
+        var safe = string.Join("_", gameName.Split(Path.GetInvalidFileNameChars()));
+        var path = Path.Combine(CoverDir, $"fb_{safe}.png");
+        if (File.Exists(path) && new FileInfo(path).Length > 500)
+            return path;
+
         var initials = GetInitials(gameName);
         var (c1, c2) = HashColors(gameName);
 
@@ -155,7 +204,6 @@ public static class CoverService
             var brush = new LinearGradientBrush(c1, c2, 45);
             dc.DrawRectangle(brush, null, rect);
 
-            // brilho suave
             var glow = new RadialGradientBrush(
                 Color.FromArgb(50, 255, 255, 255),
                 Color.FromArgb(0, 255, 255, 255))
@@ -181,6 +229,30 @@ public static class CoverService
         }
 
         var bmp = new RenderTargetBitmap(160, 220, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(visual);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bmp));
+        using var fs = File.Create(path);
+        encoder.Save(fs);
+
+        return path;
+    }
+
+    public static ImageSource CreateFallbackCover(string gameName)
+    {
+        try
+        {
+            var path = EnsureFallbackCoverFile(gameName);
+            var img = LoadCoverImage(path);
+            if (img is not null) return img;
+        }
+        catch { }
+        // último recurso: bitmap em memória
+        var bmp = new RenderTargetBitmap(160, 220, 96, 96, PixelFormats.Pbgra32);
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+            dc.DrawRectangle(new LinearGradientBrush(Colors.Indigo, Colors.Teal, 45), null, new System.Windows.Rect(0, 0, 160, 220));
         bmp.Render(visual);
         bmp.Freeze();
         return bmp;

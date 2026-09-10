@@ -20,7 +20,8 @@ public static class GameProfileService
         "valorant|Valorant|Riot|competitive",
         "valorant-win64-shipping|Valorant|Riot|competitive",
         "FortniteClient-Win64-Shipping|Fortnite|Epic|competitive",
-        "FortniteLauncher|Fortnite Launcher|Epic|competitive",
+        "Fortnite|Fortnite|Epic|competitive",
+        // Launcher do Fortnite não vira card separado
         "r5apex|Apex Legends|Steam/EA|competitive",
         "RocketLeague|Rocket League|Epic/Steam|competitive",
         "RainbowSix|Rainbow Six Siege|Steam/Ubisoft|competitive",
@@ -112,6 +113,29 @@ public static class GameProfileService
         @"\_commonredist",
         @"\crashreport",
         @"\unitycrashhandler",
+        @"\nvidia corporation",
+        @"\geforce",
+        @"\shadowplay",
+        @"\shadoplay",
+        @"\obs studio",
+        @"\obs-studio",
+    ];
+
+    private static readonly string[] ExcludedNameFragments =
+    [
+        "shadoplay",
+        "shadowplay",
+        "nvidia",
+        "geforce",
+        "overlay",
+        "installer",
+        "unins",
+        "redist",
+        "vcredist",
+        "crash",
+        "benchmark",
+        "dedicated",
+        "playtest",
     ];
 
     private static readonly Dictionary<string, GameRecommendation> Profiles = new(StringComparer.OrdinalIgnoreCase)
@@ -175,7 +199,70 @@ public static class GameProfileService
         DetectFromEpicManifests(found);
         DetectFromUninstallRegistry(found);
 
-        return found.Values.OrderBy(g => g.Name).ToList();
+        return DeduplicateByName(found.Values)
+            .Where(g => !IsBlockedGame(g.Name, g.ExecutablePath))
+            .OrderBy(g => g.Name)
+            .ToList();
+    }
+
+    private static bool IsBlockedGame(string name, string exePath)
+    {
+        var hay = (name + " " + Path.GetFileName(exePath)).ToLowerInvariant();
+        return ExcludedNameFragments.Any(f => hay.Contains(f, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Um card por título (Fortnite não vira Client + Launcher + Shipping).</summary>
+    private static IReadOnlyList<GameProfile> DeduplicateByName(IEnumerable<GameProfile> games)
+    {
+        var best = new Dictionary<string, GameProfile>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var g in games)
+        {
+            var key = NormalizeTitle(g.Name);
+            if (!best.TryGetValue(key, out var existing))
+            {
+                best[key] = g;
+                continue;
+            }
+
+            // Prefere exe “principal” (maior arquivo / não-launcher)
+            var gScore = ScoreExe(g);
+            var eScore = ScoreExe(existing);
+            if (gScore > eScore)
+                best[key] = g;
+        }
+
+        return best.Values.OrderBy(g => g.Name).ToList();
+    }
+
+    private static string NormalizeTitle(string name)
+    {
+        var n = name.Trim();
+        // Agrupa variações óbvias do Fortnite e launchers
+        if (n.Contains("Fortnite", StringComparison.OrdinalIgnoreCase)) return "Fortnite";
+        if (n.Contains("Valorant", StringComparison.OrdinalIgnoreCase)) return "Valorant";
+        if (n.Contains("Counter-Strike", StringComparison.OrdinalIgnoreCase) || n.Equals("CS2", StringComparison.OrdinalIgnoreCase))
+            return "Counter-Strike 2";
+        return n;
+    }
+
+    private static int ScoreExe(GameProfile g)
+    {
+        var file = g.FileName;
+        var score = 0;
+        try
+        {
+            if (File.Exists(g.ExecutablePath))
+                score += (int)Math.Min(new FileInfo(g.ExecutablePath).Length / 1_000_000, 1000);
+        }
+        catch { }
+
+        if (file.Contains("Launcher", StringComparison.OrdinalIgnoreCase)) score -= 500;
+        if (file.Contains("Shipping", StringComparison.OrdinalIgnoreCase)) score += 200;
+        if (file.Contains("Client", StringComparison.OrdinalIgnoreCase)) score += 100;
+        if (file.Contains("AntiCheat", StringComparison.OrdinalIgnoreCase) ||
+            file.Contains("Crash", StringComparison.OrdinalIgnoreCase)) score -= 800;
+        return score;
     }
 
     public static GameRecommendation GetRecommendation(string profileKey)
@@ -342,6 +429,7 @@ public static class GameProfileService
 
         var name = Path.GetFileNameWithoutExtension(exe);
         if (name.Length < 4) return;
+        if (IsBlockedGame(name, exe)) return;
 
         foreach (var known in KnownGames)
         {

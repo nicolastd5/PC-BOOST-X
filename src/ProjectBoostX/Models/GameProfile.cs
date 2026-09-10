@@ -40,6 +40,9 @@ public partial class GameProfile : ObservableObject
     private ImageSource? _coverImage;
 
     [ObservableProperty]
+    private string _coverPath = "";
+
+    [ObservableProperty]
     private bool _isDetailOpen;
 
     public string FileName => Path.GetFileName(ExecutablePath);

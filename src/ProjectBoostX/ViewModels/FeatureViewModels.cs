@@ -619,13 +619,13 @@ public partial class GameProfilesViewModel : ObservableObject
         foreach (var g in list)
         {
             g.LoadRecommendationInfo();
-            g.CoverImage = CoverService.CreateFallbackCover(g.Name);
+            g.CoverPath = CoverService.EnsureFallbackCoverFile(g.Name);
             Games.Add(g);
         }
 
         _main.SetBusy(false, list.Count == 0
             ? "Nenhum jogo conhecido encontrado — verifique pastas de Steam/Epic/Games"
-            : $"{list.Count} jogos detectados — carregando capas…");
+            : $"{list.Count} jogos detectados — baixando capas…");
         LastResult = list.Count == 0
             ? "Nenhum jogo encontrado. Tente rodar como admin ou ter jogos em pastas padrão."
             : $"{list.Count} jogos no catálogo. Clique numa capa para ver as otimizações.";
@@ -633,29 +633,29 @@ public partial class GameProfilesViewModel : ObservableObject
         if (list.Count > 0)
         {
             SelectedGame = Games[0];
-            _ = LoadCoversAsync(list.Select(g => g.Name).ToList());
+            _ = LoadCoversAsync(Games.ToList());
         }
     }
 
-    private async Task LoadCoversAsync(List<string> names)
+    private async Task LoadCoversAsync(List<GameProfile> games)
     {
-        try
+        var ok = 0;
+        var fail = 0;
+        foreach (var g in games)
         {
-            await CoverService.PrefetchCoversAsync(names);
-            foreach (var g in Games.ToList())
+            try
             {
-                try
-                {
-                    var path = await CoverService.EnsureCoverAsync(g.Name);
-                    var img = CoverService.LoadCoverImage(path);
-                    if (img is null) continue;
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => g.CoverImage = img);
-                }
-                catch { }
+                var path = await CoverService.ResolveCoverPathAsync(g.Name);
+                await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => g.CoverPath = path)!;
+                if (path.Contains("\\covers\\", StringComparison.OrdinalIgnoreCase) &&
+                    !Path.GetFileName(path).StartsWith("fb_", StringComparison.OrdinalIgnoreCase))
+                    ok++;
+                else
+                    fail++;
             }
-            LastResult = $"{Games.Count} jogos · capas atualizadas (clique para otimizações)";
+            catch { fail++; }
         }
-        catch { }
+        LastResult = $"{games.Count} jogos · {ok} capas da Steam · {fail} fallback · clique para otimizações";
     }
 
     [RelayCommand]
