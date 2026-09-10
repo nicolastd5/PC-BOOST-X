@@ -132,7 +132,8 @@ public static class GameProfileService
         "unins",
         "redist",
         "vcredist",
-        "crash",
+        "crashhandler",
+        "crashreport",
         "benchmark",
         "dedicated",
         "playtest",
@@ -399,8 +400,8 @@ public static class GameProfileService
         if (name.Equals(key, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        // 2) Nome do exe começa com a chave e a chave tem 5+ chars (ex: FortniteClient…)
-        if (key.Length >= 5 && name.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+        // 2) Nome do exe começa com a chave e a chave tem 7+ chars (evita Hades→Hades2)
+        if (key.Length >= 7 && name.StartsWith(key, StringComparison.OrdinalIgnoreCase))
             return true;
 
         // 3) Chave contém o nome completo (ex: "League of Legends" dentro do nome)

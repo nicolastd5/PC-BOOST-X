@@ -15,10 +15,11 @@ public static class CoverService
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        c.DefaultRequestHeaders.Accept.ParseAdd("image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+        // Só JPEG/PNG — o filtro de magic bytes e o decoder WPF não aceitam WebP/AVIF
+        c.DefaultRequestHeaders.Accept.ParseAdd("image/jpeg,image/png,image/*;q=0.8,*/*;q=0.5");
         return c;
     }
 
@@ -106,25 +107,45 @@ public static class CoverService
         catch { }
     }
 
-    /// <summary>Resolve caminho de arquivo de capa (Steam ou fallback) para o binding da UI.</summary>
-    public static async Task<string> ResolveCoverPathAsync(string gameName, CancellationToken ct = default)
+    private static bool IsJpeg(string path)
     {
         try
         {
-            var steam = await EnsureCoverAsync(gameName, ct).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(steam) && File.Exists(steam))
-            {
-                Log($"OK steam {gameName} -> {steam} ({new FileInfo(steam).Length}b)");
-                return steam;
-            }
-            Log($"FALLBACK {gameName}");
+            Span<byte> header = stackalloc byte[2];
+            using var fs = File.OpenRead(path);
+            if (fs.Read(header) < 2) return false;
+            return header[0] == 0xFF && header[1] == 0xD8;
         }
-        catch (Exception ex)
-        {
-            Log($"ERR {gameName}: {ex.Message}");
-        }
+        catch { return false; }
+    }
 
-        return EnsureFallbackCoverFile(gameName);
+    /// <summary>Resolve caminho de arquivo de capa (Steam ou fallback) para o binding da UI.</summary>
+    public static Task<string> ResolveCoverPathAsync(string gameName, CancellationToken ct = default)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                var steam = await EnsureCoverAsync(gameName, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(steam) && File.Exists(steam))
+                {
+                    Log($"OK steam {gameName} -> {steam} ({new FileInfo(steam).Length}b)");
+                    return steam;
+                }
+                Log($"FALLBACK {gameName}");
+            }
+            catch (Exception ex)
+            {
+                Log($"ERR {gameName}: {ex.Message}");
+            }
+
+            // Fallback em thread de UI (RenderTargetBitmap é frágil fora de STA)
+            if (System.Windows.Application.Current?.Dispatcher is { } disp && !disp.CheckAccess())
+            {
+                return await disp.InvokeAsync(() => EnsureFallbackCoverFile(gameName));
+            }
+            return EnsureFallbackCoverFile(gameName);
+        });
     }
 
     /// <summary>Garante arquivo de capa local. Retorna caminho ou null se falhar (UI usa fallback).</summary>
@@ -134,18 +155,24 @@ public static class CoverService
         if (appId is null) return null;
 
         var path = Path.Combine(CoverDir, $"{appId}.jpg");
-        if (File.Exists(path) && new FileInfo(path).Length > 2000)
+        if (File.Exists(path) && new FileInfo(path).Length > 8000 && IsJpeg(path))
             return path;
+        if (File.Exists(path))
+        {
+            try { File.Delete(path); } catch { }
+        }
 
-        // header.jpg é o asset estável da loja; library_600x900 nem sempre existe
+        // library_600x900 (retrato, melhor no card Netflix) antes do header paisagem
         string[] urls =
         [
+            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg",
+            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
+            $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
+            $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/library_600x900.jpg",
             $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
             $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg",
             $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/header.jpg",
             $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/header.jpg",
-            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg",
-            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg",
         ];
 
         foreach (var url in urls)
@@ -157,9 +184,10 @@ public static class CoverService
                     .ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode) continue;
                 var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-                if (bytes.Length < 1500) continue;
-                // JPEG/PNG magic
-                if (bytes[0] != 0xFF && bytes[0] != 0x89) continue;
+                if (bytes.Length < 4000) continue;
+                // JPEG FF D8 ou PNG 89 50
+                if (!(bytes[0] == 0xFF && bytes[1] == 0xD8) && !(bytes[0] == 0x89 && bytes[1] == 0x50))
+                    continue;
                 await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
                 return path;
             }
