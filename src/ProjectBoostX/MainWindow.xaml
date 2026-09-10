@@ -264,9 +264,12 @@
                                                                     ToolTip="{Binding Name}">
                                                                 <StackPanel Width="148">
                                                                     <Border Width="148" Height="200" CornerRadius="10"
-                                                                            ClipToBounds="True" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+                                                                            ClipToBounds="True" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                                                                            Background="#FF0A0F1A">
                                                                         <Grid>
-                                                                            <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}" Stretch="UniformToFill" />
+                                                                            <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}"
+                                                                                   Stretch="Uniform"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                                             <Border VerticalAlignment="Bottom" Background="#CC070B14" Padding="8,6">
                                                                                 <TextBlock Text="{Binding Platform}" FontSize="10"
                                                                                            Foreground="{StaticResource AccentBrush}" />
@@ -298,8 +301,11 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0">
-                                                        <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}" Stretch="UniformToFill" />
+                                                    <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0"
+                                                            Background="#FF0A0F1A">
+                                                        <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}"
+                                                               Stretch="Uniform"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                     </Border>
                                                     <StackPanel Grid.Column="1">
                                                         <TextBlock FontSize="18" FontWeight="Bold" Text="{Binding Name}" />

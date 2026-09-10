@@ -178,12 +178,18 @@ public static class CoverService
         var apiUrl = await FetchSteamHeaderUrlAsync(appId.Value, ct).ConfigureAwait(false);
         var urls = new List<string>();
         if (!string.IsNullOrEmpty(apiUrl))
+        {
+            // Tenta retrato no mesmo hash da header (jogos novos da loja)
+            var portrait = apiUrl.Replace("/header.jpg", "/library_600x900.jpg");
+            if (!portrait.Equals(apiUrl, StringComparison.OrdinalIgnoreCase))
+                urls.Add(portrait);
             urls.Add(apiUrl);
+        }
 
-        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg");
-        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
         urls.Add($"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/library_600x900.jpg");
+        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/library_600x900.jpg");
         urls.Add($"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg");
+        urls.Add($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
 
         foreach (var url in urls)
         {
