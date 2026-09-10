@@ -76,6 +76,8 @@ public static class CoverService
         ["NBA 2K"] = 2878980,
         ["Minecraft"] = 1672970,
         ["Roblox"] = 2407510,
+        ["The Sims 4"] = 1222670,
+        ["The Sims™ 4"] = 1222670,
         // Genshin não é da Steam — sem AppId (usa fallback gradiente)
     };
 
