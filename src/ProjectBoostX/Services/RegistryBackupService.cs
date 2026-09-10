@@ -1,11 +1,11 @@
-﻿using System.IO;
+using System.IO;
 using Microsoft.Win32;
 
 namespace BoostParaPc.Services;
 
 /// <summary>
-/// Backup/restore de valores de registro antes de otimizaÃ§Ãµes.
-/// Guarda em JSON local para permitir reverter com seguranÃ§a.
+/// Backup/restore de valores de registro antes de otimizações.
+/// Guarda em JSON local para permitir reverter com segurança.
 /// </summary>
 public static class RegistryBackupService
 {

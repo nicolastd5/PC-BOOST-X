@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 namespace BoostParaPc.Services;
 
@@ -6,7 +6,7 @@ public static class RestorePointService
 {
     public static async Task<bool> CreateAsync(string description = "Project Boost X - antes de otimizar")
     {
-        // Ativa System Restore na unidade C: se necessÃ¡rio e cria ponto
+        // Ativa System Restore na unidade C: se necessário e cria ponto
         var script = """
             $ErrorActionPreference = 'SilentlyContinue'
             Enable-ComputerRestore -Drive "C:\" | Out-Null

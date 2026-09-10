@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using BoostParaPc.Models;
 using Microsoft.Win32;
@@ -95,13 +95,13 @@ public static class StartupService
                 }
             }
 
-            // Tasks de inicializaÃ§Ã£o (via PowerShell)
+            // Tasks de inicialização (via PowerShell)
             try
             {
                 var ps = ProcessRunner.RunPowerShellAsync(
                     "Get-ScheduledTask | Where-Object {$_.Settings.DisallowStartIfOnBatteries -eq $false -and $_.TaskPath -notlike '\\Microsoft\\*'} | Select-Object -First 30 TaskName, TaskPath | ConvertTo-Csv -NoTypeInformation",
                     timeoutMs: 15_000).GetAwaiter().GetResult();
-                // parse leve â€” opcional, nÃ£o bloqueia UI
+                // parse leve — opcional, não bloqueia UI
             }
             catch { }
 
@@ -144,7 +144,7 @@ public static class StartupService
 
     public static async Task EnableAsync(StartupItem item)
     {
-        // Reverte o Ãºltimo backup com o mesmo nome
+        // Reverte o último backup com o mesmo nome
         await Task.Run(() =>
         {
             var bakDir = AppPaths.BackupDir;

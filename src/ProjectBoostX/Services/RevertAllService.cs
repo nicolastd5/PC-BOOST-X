@@ -1,10 +1,10 @@
-﻿using System.IO;
+using System.IO;
 using BoostParaPc.Services;
 
 namespace BoostParaPc.Services;
 
 /// <summary>
-/// Reverte otimizaÃ§Ãµes aplicadas: restaura backups de registro e limpa o estado salvo.
+/// Reverte otimizações aplicadas: restaura backups de registro e limpa o estado salvo.
 /// </summary>
 public static class RevertAllService
 {
@@ -20,14 +20,14 @@ public static class RevertAllService
 
             if (Directory.Exists(dir))
             {
-                // Mais antigo primeiro â€” restaura na ordem original
+                // Mais antigo primeiro — restaura na ordem original
                 var files = Directory.GetFiles(dir, "*.json")
                     .OrderBy(File.GetCreationTimeUtc)
                     .ToList();
 
                 foreach (var file in files)
                 {
-                    progress?.Report($"Restaurando {Path.GetFileName(file)}â€¦");
+                    progress?.Report($"Restaurando {Path.GetFileName(file)}…");
                     try
                     {
                         var n = RegistryBackupService.RestoreBackup(file);
@@ -41,10 +41,10 @@ public static class RevertAllService
                 }
             }
 
-            progress?.Report("Limpando histÃ³rico de otimizaÃ§Ãµesâ€¦");
+            progress?.Report("Limpando histórico de otimizações…");
             OptimizationStateStore.ClearAll();
 
-            // Alguns ajustes que nÃ£o ficam em backup de registro
+            // Alguns ajustes que não ficam em backup de registro
             try
             {
                 ProcessRunner.RunAsync("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e", timeoutMs: 8_000)
@@ -62,7 +62,7 @@ public static class RevertAllService
                 ? $"{ok} backups restaurados, {fail} falhas. Plano Equilibrado reativado."
                 : fail > 0
                     ? $"Nenhum backup restaurado ({fail} falhas). Pode ser preciso reiniciar o PC."
-                    : "Nenhum backup encontrado â€” nada para reverter no registro.";
+                    : "Nenhum backup encontrado — nada para reverter no registro.";
 
             return new RevertResult(ok, fail, msg);
         }).ConfigureAwait(false);

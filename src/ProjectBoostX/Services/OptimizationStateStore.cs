@@ -1,10 +1,10 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 
 namespace BoostParaPc.Services;
 
 /// <summary>
-/// Persiste quais otimizaÃ§Ãµes o usuÃ¡rio jÃ¡ aplicou (nÃ£o some ao reabrir o app).
+/// Persiste quais otimizações o usuário já aplicou (não some ao reabrir o app).
 /// </summary>
 public static class OptimizationStateStore
 {
