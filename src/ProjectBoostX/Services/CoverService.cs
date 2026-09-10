@@ -69,7 +69,7 @@ public static class CoverService
         ["NBA 2K"] = 2878980,
         ["Minecraft"] = 1672970,
         ["Roblox"] = 2407510,
-        ["Genshin Impact"] = 2357570, // fallback visual only if needed
+        // Genshin não é da Steam — sem AppId (usa fallback gradiente)
     };
 
     private static string CoverDir

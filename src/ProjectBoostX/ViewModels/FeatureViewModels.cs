@@ -642,17 +642,18 @@ public partial class GameProfilesViewModel : ObservableObject
         try
         {
             await CoverService.PrefetchCoversAsync(names);
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            foreach (var g in Games.ToList())
             {
-                foreach (var g in Games)
+                try
                 {
                     var path = await CoverService.EnsureCoverAsync(g.Name);
                     var img = CoverService.LoadCoverImage(path);
-                    if (img is not null)
-                        g.CoverImage = img;
+                    if (img is null) continue;
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => g.CoverImage = img);
                 }
-                LastResult = $"{Games.Count} jogos · capas atualizadas (clique para otimizações)";
-            });
+                catch { }
+            }
+            LastResult = $"{Games.Count} jogos · capas atualizadas (clique para otimizações)";
         }
         catch { }
     }
@@ -664,7 +665,7 @@ public partial class GameProfilesViewModel : ObservableObject
         foreach (var g in Games) g.IsDetailOpen = false;
         game.IsDetailOpen = true;
         SelectedGame = game;
-        game.IsSelected = true;
+        // Não força IsSelected — inspecionar não entra no lote por engano
     }
 
     [RelayCommand]
