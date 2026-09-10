@@ -616,46 +616,38 @@ public partial class GameProfilesViewModel : ObservableObject
         Games.Clear();
         SelectedGame = null;
         var list = await Task.Run(() => GameProfileService.DetectGames());
+
+        foreach (var g in list)
+            g.LoadRecommendationInfo();
+
+        // Resolve capas ANTES de entrar na UI — evita card preso no gradiente
+        var ok = 0;
+        var i = 0;
         foreach (var g in list)
         {
-            g.LoadRecommendationInfo();
-            g.CoverPath = CoverService.EnsureFallbackCoverFile(g.Name);
-            Games.Add(g);
-        }
-
-        _main.SetBusy(false, list.Count == 0
-            ? "Nenhum jogo conhecido encontrado — verifique pastas de Steam/Epic/Games"
-            : $"{list.Count} jogos detectados — baixando capas…");
-        LastResult = list.Count == 0
-            ? "Nenhum jogo encontrado. Tente rodar como admin ou ter jogos em pastas padrão."
-            : $"{list.Count} jogos no catálogo. Clique numa capa para ver as otimizações.";
-
-        if (list.Count > 0)
-        {
-            SelectedGame = Games[0];
-            _ = LoadCoversAsync(Games.ToList());
-        }
-    }
-
-    private async Task LoadCoversAsync(List<GameProfile> games)
-    {
-        var ok = 0;
-        var fail = 0;
-        foreach (var g in games)
-        {
+            i++;
+            _main.SetBusy(true, $"Capas {i}/{list.Count}: {g.Name}…");
             try
             {
                 var path = await CoverService.ResolveCoverPathAsync(g);
-                await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => g.CoverPath = path)!;
-                if (path.Contains("\\covers\\", StringComparison.OrdinalIgnoreCase) &&
-                    !Path.GetFileName(path).StartsWith("fb_", StringComparison.OrdinalIgnoreCase))
+                g.CoverPath = path;
+                if (!Path.GetFileName(path).StartsWith("fb_", StringComparison.OrdinalIgnoreCase))
                     ok++;
-                else
-                    fail++;
             }
-            catch { fail++; }
+            catch
+            {
+                g.CoverPath = CoverService.EnsureFallbackCoverFile(g.Name);
+            }
+            Games.Add(g);
         }
-        LastResult = $"{games.Count} jogos · {ok} capas da Steam · {fail} fallback · clique para otimizações";
+
+        if (list.Count > 0)
+            SelectedGame = Games[0];
+
+        LastResult = list.Count == 0
+            ? "Nenhum jogo encontrado. Tente rodar como admin ou ter jogos em pastas padrão."
+            : $"{list.Count} jogos · {ok} capas reais · clique numa capa para ver as otimizações";
+        _main.SetBusy(false, LastResult);
     }
 
     [RelayCommand]
