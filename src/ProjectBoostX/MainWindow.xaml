@@ -227,67 +227,110 @@
                                     </Border>
                                 </StackPanel>
 
-                                <!-- Game profiles -->
+                                <!-- Game profiles — Netflix style -->
                                 <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=GameProfiles}">
-                                    <TextBlock Text="Perfis por jogo" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Detecta jogos no Steam/Epic/Riot e aplica tela cheia clássica, DPI, prioridade e GPU por jogo. Reversível." />
+                                    <TextBlock Text="Catálogo de jogos" Style="{StaticResource TitleText}" />
+                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,14"
+                                               Text="Clique na capa para ver as otimizações recomendadas daquele jogo." />
 
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <Button Content="Detectar jogos" Style="{StaticResource PrimaryButton}" Command="{Binding GameProfiles.DetectCommand}" />
-                                        <Button Content="Recomendado por jogo" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplyRecommendedCommand}"
-                                                ToolTip="Aplica o perfil ideal de cada título (competitivo, eSports, mundo aberto, casual)" />
-                                        <Button Content="Aplicar manual" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplySelectedCommand}" />
-                                        <Button Content="Reverter" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.RevertSelectedCommand}" />
-                                        <Button Content="Boost abertos" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.BoostRunningCommand}" />
-                                        <Button Content="Todos" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.SelectAllCommand}" />
-                                        <Button Content="Nenhum" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.SelectNoneCommand}" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                <Button Content="Detectar jogos" Style="{StaticResource PrimaryButton}" Command="{Binding GameProfiles.DetectCommand}" />
+                                                <Button Content="Recomendado (selecionados)" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplyRecommendedCommand}" />
+                                                <Button Content="Aplicar manual" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplySelectedCommand}" />
+                                                <Button Content="Reverter" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.RevertSelectedCommand}" />
+                                                <Button Content="Boost abertos" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.BoostRunningCommand}" />
+                                            </StackPanel>
 
-                                    <UniformGrid Columns="4" Margin="0,0,0,14">
-                                        <CheckBox Content="Tela cheia clássica (FSO off)" IsChecked="{Binding GameProfiles.SelectAllFso}" Margin="0,0,8,0" />
-                                        <CheckBox Content="High DPI override" IsChecked="{Binding GameProfiles.SelectAllDpi}" Margin="0,0,8,0" />
-                                        <CheckBox Content="Prioridade alta" IsChecked="{Binding GameProfiles.SelectAllPriority}" Margin="0,0,8,0" />
-                                        <CheckBox Content="GPU de alto desempenho" IsChecked="{Binding GameProfiles.SelectAllGpu}" />
-                                    </UniformGrid>
+                                            <TextBlock Text="Meus jogos" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10" />
 
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,10"
-                                               Text="As caixas acima valem só no modo «Aplicar manual». O modo «Recomendado» usa o perfil ideal de cada jogo." />
+                                            <!-- Carrossel Netflix -->
+                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                          VerticalScrollBarVisibility="Disabled"
+                                                          MaxHeight="280" Margin="0,0,0,8">
+                                                <ItemsControl ItemsSource="{Binding GameProfiles.Games}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Button Command="{Binding DataContext.GameProfiles.OpenGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Margin="0,0,12,0" Padding="0" BorderThickness="0"
+                                                                    Cursor="Hand" Background="Transparent"
+                                                                    ToolTip="{Binding Name}">
+                                                                <StackPanel Width="148">
+                                                                    <Border Width="148" Height="200" CornerRadius="10"
+                                                                            ClipToBounds="True" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+                                                                        <Grid>
+                                                                            <Image Source="{Binding CoverImage}" Stretch="UniformToFill" />
+                                                                            <Border VerticalAlignment="Bottom" Background="#CC070B14" Padding="8,6">
+                                                                                <TextBlock Text="{Binding Platform}" FontSize="10"
+                                                                                           Foreground="{StaticResource AccentBrush}" />
+                                                                            </Border>
+                                                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                                      Margin="0,6,6,0" />
+                                                                        </Grid>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                                               TextTrimming="CharacterEllipsis" Margin="0,6,0,0"
+                                                                               HorizontalAlignment="Left" />
+                                                                    <TextBlock Text="{Binding Status}" FontSize="10"
+                                                                               Style="{StaticResource MutedText}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
 
-                                    <ItemsControl ItemsSource="{Binding GameProfiles.Games}" MaxHeight="460">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Top" Margin="0,2,12,0" />
-                                                        <StackPanel Grid.Column="1">
-                                                            <TextBlock FontWeight="SemiBold">
-                                                                <Run Text="{Binding Name, Mode=OneWay}" />
-                                                                <Run Text=" · " Foreground="{StaticResource TextMutedBrush}" />
-                                                                <Run Text="{Binding Platform, Mode=OneWay}" Foreground="{StaticResource Accent2Brush}" FontSize="11" />
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding ExecutablePath}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                                            <TextBlock Text="{Binding RecommendationSummary}" Style="{StaticResource MutedText}" FontSize="11"
-                                                                       Foreground="{StaticResource AccentBrush}" Margin="0,4,0,0" />
-                                                            <TextBlock Text="{Binding RecommendationTips}" Style="{StaticResource MutedText}" FontSize="11"
-                                                                       Margin="0,4,0,0" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Top"
-                                                                   Style="{StaticResource MutedText}" FontSize="11" />
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                            <!-- Painel de detalhes do jogo selecionado -->
+                                            <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="12" Padding="16"
+                                                    Visibility="{Binding GameProfiles.HasSelectedGame, Converter={StaticResource BoolToVis}}"
+                                                    DataContext="{Binding GameProfiles.SelectedGame}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0">
+                                                        <Image Source="{Binding CoverImage}" Stretch="UniformToFill" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock FontSize="18" FontWeight="Bold" Text="{Binding Name}" />
+                                                        <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,0">
+                                                            <Run Text="Plataforma: " /><Run Text="{Binding Platform, Mode=OneWay}" Foreground="{StaticResource Accent2Brush}" />
+                                                            <Run Text="  ·  " /><Run Text="{Binding Status, Mode=OneWay}" />
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding RecommendationSummary}" Foreground="{StaticResource AccentBrush}"
+                                                                   FontSize="13" Margin="0,8,0,0" />
+                                                        <TextBlock Text="{Binding RecommendationTips}" Style="{StaticResource MutedText}" FontSize="12"
+                                                                   Margin="0,8,0,0" />
+                                                        <TextBlock Text="{Binding ExecutablePath}" Style="{StaticResource MutedText}" FontSize="11"
+                                                                   Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Top">
+                                                        <Button Content="Aplicar recomendado" Style="{StaticResource PrimaryButton}"
+                                                                Command="{Binding DataContext.GameProfiles.ApplyRecommendedForSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                        <Button Content="Reverter este jogo" Style="{StaticResource DangerButton}" Margin="0,8,0,0"
+                                                                Command="{Binding DataContext.GameProfiles.RevertForSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
 
-                                    <TextBlock Text="{Binding GameProfiles.LastResult}" Style="{StaticResource MutedText}" Margin="0,10,0,0" />
+                                            <UniformGrid Columns="4" Margin="0,14,0,10">
+                                                <CheckBox Content="FSO off (manual)" IsChecked="{Binding GameProfiles.SelectAllFso}" Margin="0,0,8,0" />
+                                                <CheckBox Content="High DPI (manual)" IsChecked="{Binding GameProfiles.SelectAllDpi}" Margin="0,0,8,0" />
+                                                <CheckBox Content="Prioridade alta (manual)" IsChecked="{Binding GameProfiles.SelectAllPriority}" Margin="0,0,8,0" />
+                                                <CheckBox Content="GPU alta (manual)" IsChecked="{Binding GameProfiles.SelectAllGpu}" />
+                                            </UniformGrid>
+
+                                            <TextBlock Text="{Binding GameProfiles.LastResult}" Style="{StaticResource MutedText}" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>

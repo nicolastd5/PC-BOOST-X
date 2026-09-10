@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BoostParaPc.Models;
@@ -34,6 +35,12 @@ public partial class GameProfile : ObservableObject
 
     [ObservableProperty]
     private string _recommendationTips = "";
+
+    [ObservableProperty]
+    private ImageSource? _coverImage;
+
+    [ObservableProperty]
+    private bool _isDetailOpen;
 
     public string FileName => Path.GetFileName(ExecutablePath);
 

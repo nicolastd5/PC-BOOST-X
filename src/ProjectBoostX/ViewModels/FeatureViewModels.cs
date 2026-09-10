@@ -601,6 +601,12 @@ public partial class GameProfilesViewModel : ObservableObject
     [ObservableProperty]
     private bool _selectAllGpu = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedGame))]
+    private GameProfile? _selectedGame;
+
+    public bool HasSelectedGame => SelectedGame is not null;
+
     public GameProfilesViewModel(MainViewModel main) => _main = main;
 
     [RelayCommand]
@@ -608,18 +614,83 @@ public partial class GameProfilesViewModel : ObservableObject
     {
         _main.SetBusy(true, "Procurando jogos (Steam ACF, Epic manifests, registro, discos)…");
         Games.Clear();
+        SelectedGame = null;
         var list = await Task.Run(() => GameProfileService.DetectGames());
         foreach (var g in list)
         {
             g.LoadRecommendationInfo();
+            g.CoverImage = CoverService.CreateFallbackCover(g.Name);
             Games.Add(g);
         }
+
         _main.SetBusy(false, list.Count == 0
             ? "Nenhum jogo conhecido encontrado — verifique pastas de Steam/Epic/Games"
-            : $"{list.Count} jogos detectados");
+            : $"{list.Count} jogos detectados — carregando capas…");
         LastResult = list.Count == 0
             ? "Nenhum jogo encontrado. Tente rodar como admin ou ter jogos em pastas padrão."
-            : $"{list.Count} jogos prontos. Use «Recomendado por jogo» para aplicar o perfil ideal de cada um.";
+            : $"{list.Count} jogos no catálogo. Clique numa capa para ver as otimizações.";
+
+        if (list.Count > 0)
+        {
+            SelectedGame = Games[0];
+            _ = LoadCoversAsync(list.Select(g => g.Name).ToList());
+        }
+    }
+
+    private async Task LoadCoversAsync(List<string> names)
+    {
+        try
+        {
+            await CoverService.PrefetchCoversAsync(names);
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                foreach (var g in Games)
+                {
+                    var path = await CoverService.EnsureCoverAsync(g.Name);
+                    var img = CoverService.LoadCoverImage(path);
+                    if (img is not null)
+                        g.CoverImage = img;
+                }
+                LastResult = $"{Games.Count} jogos · capas atualizadas (clique para otimizações)";
+            });
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    private void OpenGame(GameProfile? game)
+    {
+        if (game is null) return;
+        foreach (var g in Games) g.IsDetailOpen = false;
+        game.IsDetailOpen = true;
+        SelectedGame = game;
+        game.IsSelected = true;
+    }
+
+    [RelayCommand]
+    private async Task ApplyRecommendedForSelectedAsync()
+    {
+        var g = SelectedGame;
+        if (g is null)
+        {
+            _main.SetBusy(false, "Selecione um jogo na galeria");
+            return;
+        }
+
+        _main.SetBusy(true, $"Aplicando recomendado: {g.Name}");
+        try { await RestorePointService.CreateAsync($"Project Boost X - {g.Name}"); } catch { }
+        await Task.Run(() => GameProfileService.ApplyProfile(g, useRecommendation: true));
+        _main.SetBusy(false, $"{g.Name}: {g.Status}");
+    }
+
+    [RelayCommand]
+    private async Task RevertForSelectedAsync()
+    {
+        var g = SelectedGame;
+        if (g is null) return;
+        _main.SetBusy(true, $"Revertendo {g.Name}…");
+        await Task.Run(() => GameProfileService.RevertProfile(g));
+        _main.SetBusy(false, $"{g.Name} revertido");
     }
 
     [RelayCommand]
