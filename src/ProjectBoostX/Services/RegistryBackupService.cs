@@ -1,16 +1,15 @@
-using System.IO;
+﻿using System.IO;
 using Microsoft.Win32;
 
 namespace BoostParaPc.Services;
 
 /// <summary>
-/// Backup/restore de valores de registro antes de otimizações.
-/// Guarda em JSON local para permitir reverter com segurança.
+/// Backup/restore de valores de registro antes de otimizaÃ§Ãµes.
+/// Guarda em JSON local para permitir reverter com seguranÃ§a.
 /// </summary>
 public static class RegistryBackupService
 {
-    private static string BackupDir =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BoostParaPc", "backups");
+    private static string BackupDir => AppPaths.BackupDir;
 
     private sealed record BackupEntry(
         string Hive,

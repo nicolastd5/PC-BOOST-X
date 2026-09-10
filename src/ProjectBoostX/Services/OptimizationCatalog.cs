@@ -909,13 +909,9 @@ public static class OptimizationCatalog
     private static void BackupService(string serviceName)
     {
         var result = ProcessRunner.RunAsync("sc", $"qc {serviceName}", timeoutMs: 10_000).GetAwaiter().GetResult();
-        Directory.CreateDirectory(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BoostParaPc", "backups"));
+        var dir = AppPaths.BackupDir;
         File.WriteAllText(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BoostParaPc", "backups", $"service_{serviceName}_{DateTime.Now:yyyyMMdd_HHmmss}.txt"),
+            Path.Combine(dir, $"service_{serviceName}_{DateTime.Now:yyyyMMdd_HHmmss}.txt"),
             result.StdOut);
     }
 

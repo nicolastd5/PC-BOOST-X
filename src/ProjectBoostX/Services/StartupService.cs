@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using BoostParaPc.Models;
 using Microsoft.Win32;
@@ -95,13 +95,13 @@ public static class StartupService
                 }
             }
 
-            // Tasks de inicialização (via PowerShell)
+            // Tasks de inicializaÃ§Ã£o (via PowerShell)
             try
             {
                 var ps = ProcessRunner.RunPowerShellAsync(
                     "Get-ScheduledTask | Where-Object {$_.Settings.DisallowStartIfOnBatteries -eq $false -and $_.TaskPath -notlike '\\Microsoft\\*'} | Select-Object -First 30 TaskName, TaskPath | ConvertTo-Csv -NoTypeInformation",
                     timeoutMs: 15_000).GetAwaiter().GetResult();
-                // parse leve — opcional, não bloqueia UI
+                // parse leve â€” opcional, nÃ£o bloqueia UI
             }
             catch { }
 
@@ -124,9 +124,7 @@ public static class StartupService
                     if (value is not null)
                     {
                         // backup
-                        var bakDir = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "BoostParaPc", "backups");
+                        var bakDir = AppPaths.BackupDir;
                         Directory.CreateDirectory(bakDir);
                         File.WriteAllText(
                             Path.Combine(bakDir, $"startup_{item.Name}_{DateTime.Now:yyyyMMdd_HHmmss}.txt"),
@@ -146,12 +144,10 @@ public static class StartupService
 
     public static async Task EnableAsync(StartupItem item)
     {
-        // Reverte o último backup com o mesmo nome
+        // Reverte o Ãºltimo backup com o mesmo nome
         await Task.Run(() =>
         {
-            var bakDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BoostParaPc", "backups");
+            var bakDir = AppPaths.BackupDir;
             if (!Directory.Exists(bakDir)) return;
 
             var latest = Directory.GetFiles(bakDir, $"startup_{item.Name}_*.txt")

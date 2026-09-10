@@ -7,11 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>BoostParaPc</AssemblyName>
+    <AssemblyName>ProjectBoostX</AssemblyName>
     <RootNamespace>BoostParaPc</RootNamespace>
-    <Version>2.0.0</Version>
-    <Product>Boost Para PC</Product>
-    <Description>Otimizador de PC para jogos e tarefas</Description>
+    <Version>2.1.0</Version>
+    <Product>Project Boost X</Product>
+    <AssemblyTitle>Project Boost X</AssemblyTitle>
+    <Description>Otimizador de PC para jogos e tarefas — Project Boost X</Description>
+    <Company>Project Boost X</Company>
   </PropertyGroup>
 
   <ItemGroup>
