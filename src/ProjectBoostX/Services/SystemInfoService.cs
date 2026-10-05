@@ -127,7 +127,7 @@ public static class SystemInfoService
             var total = Math.Round(drive.TotalSize / (1024.0 * 1024.0 * 1024.0), 1);
             var free = Math.Round(drive.TotalFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
 
-            var type = GetSystemDiskType(drive.Name[0]);
+            var type = GetDiskType(drive.Name[0]);
 
             return (type, total, free);
         }
@@ -141,7 +141,7 @@ public static class SystemInfoService
     /// Tipo do disco físico que contém a unidade. Win32_DiskDrive.MediaType devolve
     /// "Fixed hard disk media" também para SSD; a fonte correta é MSFT_PhysicalDisk.
     /// </summary>
-    private static string GetSystemDiskType(char driveLetter)
+    internal static string GetDiskType(char driveLetter)
     {
         try
         {
