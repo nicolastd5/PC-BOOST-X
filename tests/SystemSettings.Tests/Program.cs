@@ -134,6 +134,17 @@ var cases = new (string Name, Func<Task> Run)[]
         await Call("RevertAllAsync");
         Equal((1200u, 600u), ProcessRunner.Values["sub_sleep standbyidle"]);
     }),
+    ("Reverting one owner leaves other owners applied", async () =>
+    {
+        await Call("SetPowerValueAsync", "sub_sleep", "standbyidle", 0u, true, "item.a");
+        await Call("SetPowerValueAsync", "sub_video", "videoidle", 0u, true, "item.b");
+        await Call("RevertAsync", "item.a");
+        Equal((1200u, 600u), ProcessRunner.Values["sub_sleep standbyidle"]);
+        Equal((0u, 300u), ProcessRunner.Values["sub_video videoidle"]);
+        Equal(1, Pending().Length);
+        await Call("RevertAllAsync");
+        Equal((900u, 300u), ProcessRunner.Values["sub_video videoidle"]);
+    }),
     ("Journal data cannot inject a service command", async () =>
     {
         SeedService(2, 1);
@@ -163,7 +174,9 @@ static Task Call(string name, params object[] args)
 {
     var type = typeof(PowerPlanService).Assembly.GetType("BoostParaPc.Services.SystemSettingsBackupService")
         ?? throw new Exception("System settings journal has not been implemented.");
-    try { return (Task)type.GetMethod(name)!.Invoke(null, args)!; }
+    var method = type.GetMethod(name) ?? throw new Exception($"Method {name} is missing.");
+    var full = args.Concat(Enumerable.Repeat(Type.Missing, method.GetParameters().Length - args.Length)).ToArray();
+    try { return (Task)method.Invoke(null, BindingFlags.OptionalParamBinding | BindingFlags.InvokeMethod, null, full, null)!; }
     catch (TargetInvocationException error) { throw error.InnerException!; }
 }
 static string[] Pending()

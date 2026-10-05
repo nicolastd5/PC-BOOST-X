@@ -21,7 +21,8 @@ public static class SystemSettingsBackupService
 
     private sealed record Journal(string Version, DateTime CreatedUtc, string Kind,
         PowerValueState? PowerValue = null, PlanState? Plan = null, ServiceState? Service = null,
-        HibernationState? Hibernation = null, TcpState? Tcp = null, TasksState? Tasks = null);
+        HibernationState? Hibernation = null, TcpState? Tcp = null, TasksState? Tasks = null,
+        string? Owner = null);
     private sealed record PowerValueState(string Plan, string Subgroup, string Setting, uint Ac, uint Dc);
     private sealed record PlanState(string OriginalPlan, string TargetPlan, string? CreatedPlan);
     private sealed record ServiceState(string Name, int Start, int? DelayedAutoStart, bool Running);
@@ -31,7 +32,7 @@ public static class SystemSettingsBackupService
 
     private static string JournalDir => Path.Combine(AppPaths.BackupDir, "commands");
 
-    public static async Task SetPowerValueAsync(string subgroup, string setting, uint value, bool ac = true)
+    public static async Task SetPowerValueAsync(string subgroup, string setting, uint value, bool ac = true, string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         ValidatePowerToken(subgroup, nameof(subgroup));
@@ -39,7 +40,7 @@ public static class SystemSettingsBackupService
         var plan = await GetActivePlanAsync(cancellationToken).ConfigureAwait(false);
         var state = await QueryPowerValueAsync(plan, subgroup, setting, cancellationToken).ConfigureAwait(false);
         var journal = WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "PowerValue",
-            PowerValue: new(plan, subgroup, setting, state.Ac, state.Dc)));
+            PowerValue: new(plan, subgroup, setting, state.Ac, state.Dc), Owner: owner));
         try
         {
             var verb = ac ? "/setacvalueindex" : "/setdcvalueindex";
@@ -49,7 +50,7 @@ public static class SystemSettingsBackupService
         catch { _ = journal; throw; }
     }
 
-    public static async Task ActivatePowerPlanAsync(string requestedPlan, bool duplicate = false)
+    public static async Task ActivatePowerPlanAsync(string requestedPlan, bool duplicate = false, string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         ValidateGuid(requestedPlan, nameof(requestedPlan));
@@ -60,7 +61,7 @@ public static class SystemSettingsBackupService
         {
             created = Guid.NewGuid().ToString();
             var journal = WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Plan",
-                Plan: new(original, created, created)));
+                Plan: new(original, created, created), Owner: owner));
             try
             {
                 var result = await ProcessRunner.RunCheckedAsync("powercfg.exe",
@@ -76,14 +77,14 @@ public static class SystemSettingsBackupService
         else
         {
             WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Plan",
-                Plan: new(original, target, null)));
+                Plan: new(original, target, null), Owner: owner));
         }
 
         await ProcessRunner.RunCheckedAsync("powercfg.exe", $"/setactive {target}", timeoutMs: 8_000,
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task DisableServiceAsync(string name)
+    public static async Task DisableServiceAsync(string name, string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         ValidateServiceName(name);
@@ -96,7 +97,7 @@ public static class SystemSettingsBackupService
             throw new InvalidDataException($"Estado do serviço {name} não pôde ser confirmado: {status}");
 
         WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Service",
-            Service: new(name, start, delayed, status == "Running")));
+            Service: new(name, start, delayed, status == "Running"), Owner: owner));
         await ProcessRunner.RunCheckedAsync("sc.exe", $"config \"{name}\" start= disabled", timeoutMs: 8_000,
             cancellationToken: cancellationToken).ConfigureAwait(false);
         await ProcessRunner.RunPowerShellAsync(
@@ -104,19 +105,19 @@ public static class SystemSettingsBackupService
             timeoutMs: 30_000, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task SetHibernationAsync(bool enabled)
+    public static async Task SetHibernationAsync(bool enabled, string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         var path = @"SYSTEM\CurrentControlSet\Control\Power";
         var state = new HibernationState(ReadDword(Registry.LocalMachine, path, "HibernateEnabled"),
             ReadDword(Registry.LocalMachine, path, "HiberFileType"),
             ReadDword(Registry.LocalMachine, path, "HiberFileSizePercent"));
-        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Hibernation", Hibernation: state));
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Hibernation", Hibernation: state, Owner: owner));
         await ProcessRunner.RunCheckedAsync("powercfg.exe", $"/hibernate {(enabled ? "on" : "off")}",
             timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task SetTcpAutoTuningAsync(string level)
+    public static async Task SetTcpAutoTuningAsync(string level, string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         level = NormalizeTcpLevel(level);
@@ -125,7 +126,7 @@ public static class SystemSettingsBackupService
             timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
         var profiles = ParseTcpProfiles(output);
         if (profiles.Count == 0) throw new InvalidDataException("Nenhum perfil TCP válido foi retornado.");
-        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Tcp", Tcp: new(profiles)));
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Tcp", Tcp: new(profiles), Owner: owner));
         foreach (var name in profiles.Keys)
         {
             ValidateServiceName(name);
@@ -135,7 +136,7 @@ public static class SystemSettingsBackupService
         }
     }
 
-    public static async Task DisableTelemetryTasksAsync()
+    public static async Task DisableTelemetryTasksAsync(string? owner = null)
     {
         var cancellationToken = CancellationToken.None;
         var output = await ProcessRunner.RunPowerShellAsync(
@@ -143,7 +144,7 @@ public static class SystemSettingsBackupService
             timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
         var tasks = ParseTaskStates(output);
         if (tasks.Count == 0) return;
-        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Tasks", Tasks: new(tasks)));
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Tasks", Tasks: new(tasks), Owner: owner));
         foreach (var task in tasks.Where(p => p.Value).Select(p => p.Key))
         {
             ValidateServiceName(task);
@@ -153,7 +154,10 @@ public static class SystemSettingsBackupService
         }
     }
 
-    public static async Task RevertAllAsync()
+    public static Task RevertAllAsync() => RevertAsync(null);
+
+    /// <summary>Reverte os journals pendentes do dono informado; <c>null</c> reverte todos.</summary>
+    public static async Task RevertAsync(string? owner)
     {
         var cancellationToken = CancellationToken.None;
         lock (Gate)
@@ -164,6 +168,7 @@ public static class SystemSettingsBackupService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var journal = ReadJournal(file);
+            if (owner is not null && journal.Owner != owner) continue;
             await RestoreJournalAsync(journal, cancellationToken).ConfigureAwait(false);
             ArchiveJournal(file);
         }

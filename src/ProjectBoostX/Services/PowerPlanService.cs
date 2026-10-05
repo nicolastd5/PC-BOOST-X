@@ -8,14 +8,14 @@ public static class PowerPlanService
     public const string Balanced = "381b4222-f694-41f0-9685-ff5bb260df2e";
     public const string PowerSaver = "a1841308-3541-4fab-bc81-f71556f20b4a";
 
-    public static async Task<bool> ActivateHighPerformanceAsync()
+    public static async Task<bool> ActivateHighPerformanceAsync(string? owner = null)
     {
         try
         {
             var list = await ProcessRunner.RunCheckedAsync("powercfg.exe", "/list", 8_000).ConfigureAwait(false);
             var target = list.StdOut.Contains(HighPerformance, StringComparison.OrdinalIgnoreCase) ? HighPerformance
                 : list.StdOut.Contains(UltimatePerformance, StringComparison.OrdinalIgnoreCase) ? UltimatePerformance : null;
-            await SystemSettingsBackupService.ActivatePowerPlanAsync(target ?? UltimatePerformance, duplicate: target is null).ConfigureAwait(false);
+            await SystemSettingsBackupService.ActivatePowerPlanAsync(target ?? UltimatePerformance, duplicate: target is null, owner: owner).ConfigureAwait(false);
             return true;
         }
         catch { return false; }
@@ -27,11 +27,11 @@ public static class PowerPlanService
         catch { return false; }
     }
 
-    public static async Task DisableSleepTimeoutsAsync()
+    public static async Task DisableSleepTimeoutsAsync(string? owner = null)
     {
-        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "standbyidle", 0).ConfigureAwait(false);
-        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "hibernateidle", 0).ConfigureAwait(false);
-        await SystemSettingsBackupService.SetPowerValueAsync("sub_video", "videoidle", 0).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "standbyidle", 0, owner: owner).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "hibernateidle", 0, owner: owner).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_video", "videoidle", 0, owner: owner).ConfigureAwait(false);
     }
 
     public static async Task SetGpuPreferenceAsync()

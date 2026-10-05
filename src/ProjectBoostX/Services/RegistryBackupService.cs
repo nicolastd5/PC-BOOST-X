@@ -181,27 +181,29 @@ public static class RegistryBackupService
     {
         if (!Regex.IsMatch(id, @"\A[A-Za-z0-9_.{}-]+\z")) throw new ArgumentException("Identificador de backup inválido", nameof(id));
     }
-    public static void SetDword(RegistryKey root, string keyPath, string name, int value)
-    {
-        SetWithBackup(root, keyPath, name, value, RegistryValueKind.DWord);
-    }
+    public const string DefaultOwner = "registry-value";
+
+    public static void SetDword(RegistryKey root, string keyPath, string name, int value, string owner = DefaultOwner)
+        => Set(root, keyPath, name, value, RegistryValueKind.DWord, owner);
+
     public static int? GetDword(RegistryKey root, string keyPath, string name)
     {
         using var key = root.OpenSubKey(keyPath, writable: false);
         return key?.GetValue(name) is int i ? i : null;
     }
-    public static void SetString(RegistryKey root, string keyPath, string name, string value)
-    {
-        SetWithBackup(root, keyPath, name, value, RegistryValueKind.String);
-    }
-    private static void SetWithBackup(RegistryKey root, string path, string name, object value, RegistryValueKind kind)
+    public static void SetString(RegistryKey root, string keyPath, string name, string value, string owner = DefaultOwner)
+        => Set(root, keyPath, name, value, RegistryValueKind.String, owner);
+
+    /// <summary>Grava um valor depois de salvar o original num backup nomeado pelo dono.</summary>
+    public static void Set(RegistryKey root, string path, string name, object value, RegistryValueKind kind,
+        string owner = DefaultOwner)
     {
         lock (Gate)
         {
             using var existing = root.OpenSubKey(path);
             var previous = existing?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
             if (previous is not null && existing!.GetValueKind(name) == kind && Equals(previous, value)) return;
-            CreateBackup("registry-value", [(root, path, name)]);
+            CreateBackup(owner, [(root, path, name)]);
             using var key = root.CreateSubKey(path, writable: true) ?? throw new IOException($"Chave inacessível: {path}");
             key.SetValue(name, value, kind);
         }

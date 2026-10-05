@@ -92,5 +92,18 @@ await Test("writes-always-have-snapshots", () =>
     Assert(Equals(19, key.GetValue("Value")), "Setter snapshot did not preserve the original");
     return Task.CompletedTask;
 });
-Console.WriteLine($"{7 - failed}/7 regression tests passed");
+await Test("owner-scoped-restore", () =>
+{
+    var key = Registry.CurrentUser.CreateSubKey("fixture");
+    key.SetValue("A", 1, RegistryValueKind.DWord);
+    key.SetValue("B", 1, RegistryValueKind.DWord);
+    RegistryBackupService.SetDword(Registry.CurrentUser, "fixture", "A", 0, "item.a");
+    RegistryBackupService.SetDword(Registry.CurrentUser, "fixture", "B", 0, "item.b");
+    RegistryBackupService.RestoreMatchingBackups("item.a");
+    Assert(Equals(1, key.GetValue("A")), "Owner backup was not restored");
+    Assert(Equals(0, key.GetValue("B")), "Restoring one owner reverted another owner's change");
+    Assert(RegistryBackupService.ListBackups().Count == 1, "Another owner's backup was consumed");
+    return Task.CompletedTask;
+});
+Console.WriteLine($"{8 - failed}/8 regression tests passed");
 return failed == 0 ? 0 : 1;
