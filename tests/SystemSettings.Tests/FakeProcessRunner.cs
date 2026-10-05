@@ -20,6 +20,7 @@ public static class ProcessRunner
     public static bool ServiceRunning { get; set; }
     public static string? FailContains { get; set; }
     public static bool InvalidPowerQuery { get; set; }
+    public static bool LocalizedPowerQuery { get; set; }
     public static bool InvalidServiceRead { get; set; }
     public static Action<string>? BeforeMutation { get; set; }
     public static List<string> Mutations { get; } = [];
@@ -36,6 +37,7 @@ public static class ProcessRunner
         Tcp.Clear(); Tcp["Internet"] = "Restricted"; Tcp["InternetCustom"] = "Disabled";
         Tasks.Clear(); Tasks["Consolidator"] = true; Tasks["UsbCeip"] = false;
         ServiceRunning = true; FailContains = null; InvalidPowerQuery = false; InvalidServiceRead = false;
+        LocalizedPowerQuery = false;
         BeforeMutation = null; Mutations.Clear(); DuplicateTemplates.Clear();
     }
 
@@ -58,7 +60,9 @@ public static class ProcessRunner
             {
                 if (InvalidPowerQuery) return Result("query output missing indices");
                 var v = Values[p[2] + " " + p[3]];
-                return Result($"Maximum: 0xffffffff\nCurrent AC: 0x{v.Ac:x8}\nCurrent DC: 0x{v.Dc:x8}");
+                return Result(LocalizedPowerQuery
+                    ? $"Índice de Configurações de Correntes Alternadas Atuais: 0x{v.Ac:x8}\nÍndice de Configurações de Correntes Contínuas Atuais: 0x{v.Dc:x8}"
+                    : $"Maximum: 0xffffffff\nCurrent AC: 0x{v.Ac:x8}\nCurrent DC: 0x{v.Dc:x8}");
             }
             Mutate(arguments);
             if (p[0] == "/setactive")
@@ -138,4 +142,16 @@ public static class ProcessRunner
     }
 
     private static Task<CommandResult> Result(string output) => Task.FromResult(new CommandResult(0, output, "", false));
+}
+
+// Substitui a leitura nativa: os valores vêm do mesmo estado em memória do powercfg falso.
+public static class PowerNative
+{
+    public static uint? ReadAc(string subgroup, string setting, string? plan = null) => Read(subgroup, setting)?.Ac;
+    public static uint? ReadDc(string subgroup, string setting, string? plan = null) => Read(subgroup, setting)?.Dc;
+
+    private static (uint Ac, uint Dc)? Read(string subgroup, string setting) =>
+        !ProcessRunner.InvalidPowerQuery && ProcessRunner.Values.TryGetValue(subgroup + " " + setting, out var value)
+            ? value
+            : null;
 }

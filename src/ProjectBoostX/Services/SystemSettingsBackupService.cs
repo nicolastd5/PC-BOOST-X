@@ -293,12 +293,14 @@ public static class SystemSettingsBackupService
         var result = await ProcessRunner.RunCheckedAsync("powercfg.exe", "/getactivescheme", 8_000, cancellationToken: ct).ConfigureAwait(false);
         var guid = ExtractGuid(result.StdOut); if (guid is null) throw new InvalidDataException("Não foi possível identificar o plano de energia ativo."); return guid;
     }
-    private static async Task<(uint Ac, uint Dc)> QueryPowerValueAsync(string plan, string subgroup, string setting, CancellationToken ct)
+    private static Task<(uint Ac, uint Dc)> QueryPowerValueAsync(string plan, string subgroup, string setting, CancellationToken ct)
     {
-        var result = await ProcessRunner.RunCheckedAsync("powercfg.exe", $"/query {plan} {subgroup} {setting}", 8_000, cancellationToken: ct).ConfigureAwait(false);
-        var ac = Regex.Match(result.StdOut, @"Current\s+AC[^:]*:\s*0x([0-9a-fA-F]+)"); var dc = Regex.Match(result.StdOut, @"Current\s+DC[^:]*:\s*0x([0-9a-fA-F]+)");
-        if (!ac.Success || !dc.Success || !uint.TryParse(ac.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var a) || !uint.TryParse(dc.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var d)) throw new InvalidDataException("powercfg não retornou índices AC/DC válidos.");
-        return (a, d);
+        // Leitura nativa: o texto do powercfg é traduzido pelo Windows e omite ajustes ocultos.
+        var ac = PowerNative.ReadAc(subgroup, setting, plan);
+        var dc = PowerNative.ReadDc(subgroup, setting, plan);
+        if (ac is null || dc is null)
+            throw new InvalidDataException("Este ajuste de energia não existe ou não pôde ser lido neste PC.");
+        return Task.FromResult((ac.Value, dc.Value));
     }
     private static (int Start, int? Delayed) ReadServiceConfiguration(string path)
     {

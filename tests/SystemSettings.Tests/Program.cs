@@ -126,6 +126,14 @@ var cases = new (string Name, Func<Task> Run)[]
         await Throws(() => Call("SetPowerValueAsync", "sub_sleep", "standbyidle", 0u, true));
         Equal(0, ProcessRunner.Mutations.Count);
     }),
+    ("Localized powercfg text does not block power changes", async () =>
+    {
+        ProcessRunner.LocalizedPowerQuery = true;
+        await Call("SetPowerValueAsync", "sub_sleep", "standbyidle", 0u, true);
+        Equal((0u, 600u), ProcessRunner.Values["sub_sleep standbyidle"]);
+        await Call("RevertAllAsync");
+        Equal((1200u, 600u), ProcessRunner.Values["sub_sleep standbyidle"]);
+    }),
     ("Journal data cannot inject a service command", async () =>
     {
         SeedService(2, 1);
