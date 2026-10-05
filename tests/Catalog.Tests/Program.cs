@@ -322,6 +322,58 @@ cases.AddRange(
         Equal(2.5, DnsBenchmark.Median([1.0, 2.0, 3.0, 4.0]));
         return Task.CompletedTask;
     }),
+    ("Antes e depois: base nunca é sobrescrita; campo ausente não vira variação", () =>
+    {
+        var first = new SystemSnapshot(DateTime.UtcNow, 40_000, 5000, 200, 150, 20);
+        var second = new SystemSnapshot(DateTime.UtcNow, null, 4200, 180, 140, 12);
+        Equal(first, SystemSnapshot.SaveBaselineIfMissing(first));
+        Equal(first, SystemSnapshot.SaveBaselineIfMissing(second));
+        var rows = SystemSnapshot.Compare(SystemSnapshot.LoadBaseline()!, second);
+        Equal(-800, rows.Single(r => r.Label.StartsWith("RAM")).Change);
+        Equal(null, rows.Single(r => r.Label.StartsWith("Tempo")).Change);
+        Equal("—", rows.Single(r => r.Label.StartsWith("Tempo")).After);
+        Equal(-8, rows.Single(r => r.Label.StartsWith("Itens")).Change);
+        return Task.CompletedTask;
+    }),
+    ("Histórico: linhas corrompidas são ignoradas e as mais recentes vêm primeiro", () =>
+    {
+        ActionLog.Write("a", "aplicar", true);
+        File.AppendAllText(ActionLog.FilePath, "{ lixo\n");
+        ActionLog.Write("b", "reverter", false, "falhou");
+        var entries = ActionLog.Read();
+        Equal(2, entries.Count);
+        Equal("b", entries[0].ItemId);
+        Equal("a", entries[1].ItemId);
+        return Task.CompletedTask;
+    }),
+    ("Exportação para suporte troca o caminho do perfil", () =>
+    {
+        var profile = @"C:\Users\fulano";
+        Equal(@"%USERPROFILE%\x e %USERPROFILE%\y", SupportExport.Sanitize(@"C:\Users\fulano\x e c:\users\FULANO\y", profile));
+        ActionLog.Write("a", "aplicar", true, @"C:\Users\fulano\arquivo");
+        var zip = Path.Combine(AppPaths.DataDir, "suporte.zip");
+        SupportExport.Create(zip, @"CPU em C:\Users\fulano", profile);
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+        foreach (var entry in archive.Entries)
+        {
+            using var reader = new StreamReader(entry.Open());
+            Require(!reader.ReadToEnd().Contains("fulano"), $"{entry.Name} vazou o nome do usuário.");
+        }
+        Equal(2, archive.Entries.Count);
+        return Task.CompletedTask;
+    }),
+    ("Atualização: compara versões e falha de rede não gera erro", async () =>
+    {
+        var current = new Version(3, 0, 0);
+        Require(UpdateService.IsNewer("v3.0.1", current), "3.0.1 deveria ser mais novo.");
+        Require(!UpdateService.IsNewer("v3.0.0", current), "Mesma versão não é atualização.");
+        Require(!UpdateService.IsNewer("v2.9.9", current), "Versão antiga não é atualização.");
+        Require(!UpdateService.IsNewer("nightly", current), "Tag que não é versão foi aceita.");
+        Require(await UpdateService.CheckAsync(current, "") is null, "Sem repositório não deveria consultar.");
+        Require(await UpdateService.CheckAsync(current, "dono/repo", new ThrowingHandler()) is null, "Falha de rede virou resultado.");
+        var ok = await UpdateService.CheckAsync(current, "dono/repo", new FakeHandler("{\"tag_name\":\"v3.1.0\",\"html_url\":\"https://github.com/dono/repo/releases/v3.1.0\"}"));
+        Equal("v3.1.0", ok?.Version);
+    }),
     ("Limpar memória em espera é ação pontual", async () =>
     {
         var standby = OptimizationCatalog.All.Single(i => i.Id == "tools.standby");
@@ -376,4 +428,15 @@ static void Equal(object? expected, object? actual)
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
+}
+
+sealed class ThrowingHandler : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => throw new HttpRequestException("sem rede");
+}
+
+sealed class FakeHandler(string json) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+        Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(json) });
 }

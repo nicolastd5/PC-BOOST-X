@@ -12,6 +12,25 @@ public static class ActionLog
 
     public static string FilePath => Path.Combine(AppPaths.DataDir, "log", "actions.jsonl");
 
+    /// <summary>Entradas do log, mais recentes primeiro. Linhas corrompidas são ignoradas.</summary>
+    public static IReadOnlyList<Entry> Read()
+    {
+        try
+        {
+            if (!File.Exists(FilePath)) return [];
+            var entries = new List<Entry>();
+            lock (Gate)
+                foreach (var line in File.ReadAllLines(FilePath))
+                {
+                    try { if (JsonSerializer.Deserialize<Entry>(line) is { } entry) entries.Add(entry); }
+                    catch (JsonException) { /* linha corrompida */ }
+                }
+            entries.Reverse();
+            return entries;
+        }
+        catch (IOException) { return []; }
+    }
+
     public static void Write(string itemId, string action, bool ok, string? message = null)
     {
         try
