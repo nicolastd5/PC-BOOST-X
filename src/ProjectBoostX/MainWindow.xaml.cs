@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using BoostParaPc.Services;
 
 namespace BoostParaPc;
 
@@ -13,30 +15,30 @@ public partial class MainWindow : Window
         ContentRendered += (_, _) => { if (App.StartInTray) Hide(); };
         Loaded += async (_, _) =>
         {
-            if (DataContext is ViewModels.MainViewModel vm)
+            // Tempo entre o início do processo e a janela pronta, no log (medição da inicialização).
+            var elapsed = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            ActionLog.Write("app", "inicio", true, $"janela pronta em {elapsed:0} ms");
+
+            if (DataContext is not ViewModels.MainViewModel vm) return;
+            vm.Confirm = (title, text) => MessageBox.Show(this, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "3.0.0";
+            VersionText.Text = $"v{version} · Windows 10/11";
+            AdminBadge.Text = vm.IsAdmin ? "Modo administrador" : "Sem admin: alguns ajustes falharão";
+            AdminBadge.Foreground = vm.IsAdmin
+                ? (System.Windows.Media.Brush)FindResource("SuccessBrush")
+                : (System.Windows.Media.Brush)FindResource("WarningBrush");
+
+            if (!AppSettings.Current.FirstRunAcknowledged && !App.StartInTray)
             {
-                AdminBadge.Text = vm.IsAdmin ? "Modo administrador" : "Sem admin — some ajustes falharão";
-                AdminBadge.Foreground = vm.IsAdmin
-                    ? (System.Windows.Media.Brush)FindResource("SuccessBrush")
-                    : (System.Windows.Media.Brush)FindResource("WarningBrush");
-                await vm.InitializeAsync();
+                if (new Views.FirstRunDialog { Owner = this }.ShowDialog() == true)
+                {
+                    AppSettings.Current.FirstRunAcknowledged = true;
+                    try { AppSettings.Current.Save(); } catch { /* sem permissão: mostra de novo na próxima vez */ }
+                }
             }
+            await vm.InitializeAsync();
         };
     }
-}
-
-/// <summary>Converte CurrentPage + parâmetro em Visibility.</summary>
-public sealed class PageToVisibilityConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is string page && parameter is string target)
-            return page == target ? Visibility.Visible : Visibility.Collapsed;
-        return Visibility.Collapsed;
-    }
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => throw new NotSupportedException();
 }
 
 /// <summary>bool → Visibility (true = Visible).</summary>

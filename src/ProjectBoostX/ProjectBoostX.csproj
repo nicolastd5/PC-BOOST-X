@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <NoWarn>$(NoWarn);WFO0003;WPF0001</NoWarn>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ProjectBoostX</AssemblyName>
     <RootNamespace>BoostParaPc</RootNamespace>

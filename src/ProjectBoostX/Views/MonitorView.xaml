@@ -1,0 +1,73 @@
+<UserControl x:Class="BoostParaPc.Views.MonitorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:BoostParaPc.Controls">
+    <UserControl.Resources>
+        <Style x:Key="MetricCard" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,18,24,8">
+        <StackPanel>
+            <TextBlock Text="Monitor" Style="{StaticResource PageTitle}" />
+            <TextBlock Style="{StaticResource PageSubtitle}"
+                       Text="CPU, memória, disco, rede, GPU e VRAM ao vivo, com os últimos 60 segundos. Veja o efeito das otimizações." />
+
+            <UniformGrid Columns="2">
+                <Border Style="{StaticResource MetricCard}" Margin="0,0,6,12">
+                    <StackPanel>
+                        <TextBlock Text="CPU" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding CpuDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding CpuHistory}" Maximum="100" Stroke="{StaticResource AccentBrush}"
+                                       AutomationProperties.Name="Gráfico de CPU" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}" Margin="6,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Memória" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding RamDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding RamHistory}" Maximum="100" Stroke="{StaticResource Accent2Brush}"
+                                       AutomationProperties.Name="Gráfico de memória" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}" Margin="0,0,6,12">
+                    <StackPanel>
+                        <TextBlock Text="Disco" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding DiskDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding DiskHistory}" Maximum="100" Stroke="{StaticResource WarningBrush}"
+                                       AutomationProperties.Name="Gráfico de disco" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}" Margin="6,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Rede" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding NetDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding NetHistory}" Maximum="{Binding NetMax}" Stroke="{StaticResource SuccessBrush}"
+                                       AutomationProperties.Name="Gráfico de rede" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}" Margin="0,0,6,12">
+                    <StackPanel>
+                        <TextBlock Text="GPU (3D)" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding GpuDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding GpuHistory}" Maximum="100" Stroke="{StaticResource AccentBrush}"
+                                       AutomationProperties.Name="Gráfico de GPU" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource MetricCard}" Margin="6,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="VRAM" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding VramDisplay}" Style="{StaticResource StatValue}" />
+                        <ctl:Sparkline Height="48" Margin="0,8,0,0" Values="{Binding VramHistory}" Maximum="16384" Stroke="{StaticResource Accent2Brush}"
+                                       AutomationProperties.Name="Gráfico de VRAM" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <TextBlock Style="{StaticResource MutedText}">
+                <Run Text="Processos ativos: " />
+                <Run Text="{Binding ProcessCount, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+            </TextBlock>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

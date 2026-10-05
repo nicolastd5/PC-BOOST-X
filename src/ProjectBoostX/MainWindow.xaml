@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:BoostParaPc.ViewModels"
-        Title="Project Boost X — Otimizador"
+        xmlns:views="clr-namespace:BoostParaPc.Views"
+        Title="Project Boost X"
         Width="1180" Height="760"
         MinWidth="960" MinHeight="620"
         WindowStartupLocation="CenterScreen"
@@ -11,13 +12,25 @@
         <vm:MainViewModel />
     </Window.DataContext>
 
+    <Window.Resources>
+        <!-- Cada viewmodel de tela tem a sua View; o ContentControl escolhe pelo tipo. -->
+        <DataTemplate DataType="{x:Type vm:HomeViewModel}"><views:HomeView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:OptimizationsViewModel}"><views:OptimizationsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:GamesViewModel}"><views:GamesView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CleanupViewModel}"><views:CleanupView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:StartupViewModel}"><views:StartupView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MonitorViewModel}"><views:MonitorView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:HistoryViewModel}"><views:HistoryView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsView /></DataTemplate>
+    </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="230" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Sidebar -->
+        <!-- Navegação -->
         <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="0,0,1,0">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="18,22,18,10">
@@ -28,7 +41,7 @@
                         </Border>
                         <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="Project Boost X" FontWeight="Bold" FontSize="15" />
-                            <TextBlock Text="v2.1 · Windows 10/11" Style="{StaticResource MutedText}" FontSize="11" />
+                            <TextBlock x:Name="VersionText" Style="{StaticResource MutedText}" FontSize="11" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -47,611 +60,77 @@
                     </Border>
                 </StackPanel>
 
-                <StackPanel Margin="0,6,0,0">
-                    <RadioButton Style="{StaticResource NavButton}" Content="◈  Dashboard" IsChecked="True"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Dashboard" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="⚡  Otimizações"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Gaming" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="🎮  Perfis por jogo"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="GameProfiles" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="🧹  Limpeza"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Cleanup" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="⚙  Serviços"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Debloat" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="🚀  Inicialização"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Startup" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="📈  Monitor"
-                                 GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Monitor" />
-                </StackPanel>
+                <ListBox ItemsSource="{x:Static vm:MainViewModel.NavItems}" SelectedValue="{Binding CurrentPage, Mode=TwoWay}" SelectedValuePath="Key"
+                         Margin="0,6,0,0" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Navegação principal">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                            <Setter Property="Cursor" Value="Hand" />
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="14,11" Margin="10,2">
+                                            <ContentPresenter />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+                                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                                <Setter TargetName="bd" Property="BorderThickness" Value="1" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="bd" Property="Background" Value="#330B8CFF" />
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Glyph}" Style="{StaticResource IconText}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Margin="0,0,12,0" />
+                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
         </Border>
 
-        <!-- Main -->
+        <!-- Conteúdo -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,18,24,8">
-                <ContentControl Content="{Binding}">
-                    <ContentControl.Resources>
-                        <DataTemplate DataType="{x:Type vm:MainViewModel}">
-                            <Grid>
-
-                                <!-- Dashboard -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Dashboard}">
-                                    <TextBlock Text="Visão geral" Style="{StaticResource TitleText}" />
-                                    <TextBlock Text="Um clique para deixar o Windows mais leve — jogos e trabalho." Style="{StaticResource MutedText}" Margin="0,0,0,16" />
-
-                                    <UniformGrid Columns="4" Margin="0,0,0,14">
-                                        <Border Style="{StaticResource Card}" Margin="0,0,7,0">
-                                            <StackPanel>
-                                                <TextBlock Text="Sistema" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding SystemInfo.OsName}" FontSize="16" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding SystemInfo.OsVersion, StringFormat=Build {0}}" Style="{StaticResource MutedText}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Style="{StaticResource Card}" Margin="3,0,3,0">
-                                            <StackPanel>
-                                                <TextBlock Text="CPU" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding SystemInfo.CpuCores, StringFormat={}{0} núcleos}" FontSize="16" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding SystemInfo.CpuName}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Style="{StaticResource Card}" Margin="3,0,3,0">
-                                            <StackPanel>
-                                                <TextBlock Text="RAM / GPU" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding SystemInfo.TotalRamGb, StringFormat={}{0} GB}" FontSize="16" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding SystemInfo.GpuName}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Style="{StaticResource Card}" Margin="7,0,0,0">
-                                            <StackPanel>
-                                                <TextBlock Text="Disco" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding SystemInfo.DiskType}" FontSize="16" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding SystemInfo.DiskFreeGb, StringFormat={}{0} GB livres}" Style="{StaticResource MutedText}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </UniformGrid>
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <TextBlock Text="Boost rápido" Style="{StaticResource SectionTitle}" />
-                                            <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,12"
-                                                       Text="Otimizações de alto impacto com backup das configurações alteradas." />
-
-                                            <ItemsControl ItemsSource="{Binding Dashboard.QuickWins}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,3">
-                                                            <StackPanel>
-                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                                <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="11" />
-                                                            </StackPanel>
-                                                        </CheckBox>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-
-                                            <CheckBox Content="Exigir ponto de restauração antes de aplicar (todas as abas)"
-                                                      IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,12,0,10" />
-                                            <TextBlock Text="Se a criação falhar, a aplicação será interrompida. Desmarcar permite aplicar sem ponto."
-                                                       Style="{StaticResource MutedText}" Margin="0,0,0,10" TextWrapping="Wrap" />
-
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Content="⚡  Aplicar Boost" Style="{StaticResource PrimaryButton}"
-                                                        Command="{Binding Dashboard.BoostCommand}" />
-                                                <Button Content="Criar ponto de restauração" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0"
-                                                        Command="{Binding Dashboard.CreateRestorePointCommand}" />
-                                                <Button Content="Reverter tudo" Style="{StaticResource DangerButton}" Margin="10,0,0,0"
-                                                        Command="{Binding Dashboard.RevertAllCommand}"
-                                                        ToolTip="Restaura as configurações originais salvas e mantém backups que não puderem ser restaurados" />
-                                            </StackPanel>
-
-                                            <TextBlock Text="{Binding Dashboard.LastAction}" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Style="{StaticResource Card}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="Plano de energia" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding Dashboard.PowerPlan}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1">
-                                                <TextBlock Text="Game Mode" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="{Binding Dashboard.GameModeStatus}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Gaming optimizations -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Gaming}">
-                                    <TextBlock Text="Otimizações" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Todos os ajustes do catálogo. Cada um pode ser aplicado e revertido sozinho. Itens de risco Moderado e Avançado só entram se você marcar." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <CheckBox Content="Selecionar recomendadas (risco Seguro)" IsChecked="{Binding Gaming.SelectAll}"
-                                                          Command="{Binding Gaming.ToggleSelectAllCommand}" />
-                                            </StackPanel>
-                                            <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
-                                                      IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
-                                                      ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
-                                            <ItemsControl ItemsSource="{Binding Gaming.Items}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,8">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Top" Margin="0,3,12,0" />
-                                                                <StackPanel Grid.Column="1">
-                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
-                                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12" />
-                                                                    <TextBlock Text="{Binding Caution}" FontSize="11" Foreground="{StaticResource WarningBrush}" Margin="0,4,0,0">
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding Caution}" Value="">
-                                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                    <TextBlock FontSize="11" Foreground="{StaticResource DangerBrush}" Margin="0,4,0,0">
-                                                                        <Run Text="Não recomendado para este PC: " /><Run Text="{Binding NotRecommendedReason, Mode=OneWay}" />
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding NotRecommendedReason}" Value="{x:Null}">
-                                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0">
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding StatusMessage}" Value="{x:Null}">
-                                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                                                        <Border Style="{StaticResource Chip}">
-                                                                            <TextBlock FontSize="11" Foreground="{StaticResource AccentBrush}">
-                                                                                <Run Text="Impacto: " /><Run Text="{Binding Impact, Mode=OneWay}" />
-                                                                            </TextBlock>
-                                                                        </Border>
-                                                                        <Border Style="{StaticResource Chip}">
-                                                                            <TextBlock FontSize="11">
-                                                                                <Run Text="Risco: " /><Run Text="{Binding RiskDisplay, Mode=OneWay}" />
-                                                                                <TextBlock.Style>
-                                                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding Risk}" Value="Moderate">
-                                                                                                <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
-                                                                                            </DataTrigger>
-                                                                                            <DataTrigger Binding="{Binding Risk}" Value="Advanced">
-                                                                                                <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </TextBlock.Style>
-                                                                            </TextBlock>
-                                                                        </Border>
-                                                                        <Border Style="{StaticResource Chip}">
-                                                                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" Text="{Binding CategoryDisplay}" />
-                                                                        </Border>
-                                                                        <Border Style="{StaticResource Chip}" Visibility="{Binding RequiresRestart, Converter={StaticResource BoolToVis}}">
-                                                                            <TextBlock FontSize="11" Foreground="{StaticResource Accent2Brush}" Text="Requer reinício" />
-                                                                        </Border>
-                                                                    </StackPanel>
-                                                                </StackPanel>
-                                                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                                    <TextBlock Text="{Binding StateDisplay}" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold">
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
-                                                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
-                                                                                    </DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding State}" Value="Failed">
-                                                                                        <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
-                                                                                    </DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding IsAction}" Value="True">
-                                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                    <Button Margin="0,6,0,0"
-                                                                            Command="{Binding DataContext.Gaming.ApplyItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}">
-                                                                        <Button.Style>
-                                                                            <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                                                                <Setter Property="Content" Value="Aplicar" />
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding IsAction}" Value="True">
-                                                                                        <Setter Property="Content" Value="Executar" />
-                                                                                    </DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
-                                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </Button.Style>
-                                                                    </Button>
-                                                                    <Button Content="Reverter" Margin="0,6,0,0"
-                                                                            Command="{Binding DataContext.Gaming.RevertItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}">
-                                                                        <Button.Style>
-                                                                            <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
-                                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
-                                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </Button.Style>
-                                                                    </Button>
-                                                                </StackPanel>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                            <Button Content="Aplicar selecionadas" Style="{StaticResource PrimaryButton}"
-                                                    HorizontalAlignment="Left" Margin="0,10,0,0"
-                                                    Command="{Binding Gaming.ApplySelectedCommand}" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Game profiles — Netflix style -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=GameProfiles}">
-                                    <TextBlock Text="Catálogo de jogos" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,14"
-                                               Text="Clique na capa para ver as otimizações recomendadas daquele jogo." />
-                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
-                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
-                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <Button Content="Detectar jogos" Style="{StaticResource PrimaryButton}" Command="{Binding GameProfiles.DetectCommand}" />
-                                                <Button Content="Recomendado (selecionados)" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplyRecommendedCommand}" />
-                                                <Button Content="Aplicar manual" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.ApplySelectedCommand}" />
-                                                <Button Content="Reverter" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.RevertSelectedCommand}" />
-                                                <Button Content="Boost abertos" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding GameProfiles.BoostRunningCommand}" />
-                                            </StackPanel>
-
-                                            <TextBlock Text="Meus jogos" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10" />
-
-                                            <!-- Carrossel Netflix -->
-                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                                          VerticalScrollBarVisibility="Disabled"
-                                                          MaxHeight="280" Margin="0,0,0,8">
-                                                <ItemsControl ItemsSource="{Binding GameProfiles.Games}">
-                                                    <ItemsControl.ItemsPanel>
-                                                        <ItemsPanelTemplate>
-                                                            <StackPanel Orientation="Horizontal" />
-                                                        </ItemsPanelTemplate>
-                                                    </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Button Command="{Binding DataContext.GameProfiles.OpenGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Margin="0,0,12,0" Padding="0" BorderThickness="0"
-                                                                    Cursor="Hand" Background="Transparent"
-                                                                    ToolTip="{Binding Name}">
-                                                                <StackPanel Width="148">
-                                                                    <Border Width="148" Height="200" CornerRadius="10"
-                                                                            ClipToBounds="True" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
-                                                                            Background="#FF0A0F1A">
-                                                                        <Grid>
-                                                                            <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}"
-                                                                                   Stretch="Uniform"
-                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                                            <Border VerticalAlignment="Bottom" Background="#CC070B14" Padding="8,6">
-                                                                                <TextBlock Text="{Binding Platform}" FontSize="10"
-                                                                                           Foreground="{StaticResource AccentBrush}" />
-                                                                            </Border>
-                                                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                                                      Margin="0,6,6,0" />
-                                                                        </Grid>
-                                                                    </Border>
-                                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
-                                                                               TextTrimming="CharacterEllipsis" Margin="0,6,0,0"
-                                                                               HorizontalAlignment="Left" />
-                                                                    <TextBlock Text="{Binding Status}" FontSize="10"
-                                                                               Style="{StaticResource MutedText}" />
-                                                                </StackPanel>
-                                                            </Button>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </ScrollViewer>
-
-                                            <!-- Painel de detalhes do jogo selecionado -->
-                                            <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="12" Padding="16"
-                                                    Visibility="{Binding GameProfiles.HasSelectedGame, Converter={StaticResource BoolToVis}}"
-                                                    DataContext="{Binding GameProfiles.SelectedGame}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0"
-                                                            Background="#FF0A0F1A">
-                                                        <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}"
-                                                               Stretch="Uniform"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Border>
-                                                    <StackPanel Grid.Column="1">
-                                                        <TextBlock FontSize="18" FontWeight="Bold" Text="{Binding Name}" />
-                                                        <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,0">
-                                                            <Run Text="Plataforma: " /><Run Text="{Binding Platform, Mode=OneWay}" Foreground="{StaticResource Accent2Brush}" />
-                                                            <Run Text="  ·  " /><Run Text="{Binding Status, Mode=OneWay}" />
-                                                        </TextBlock>
-                                                        <TextBlock Text="{Binding RecommendationSummary}" Foreground="{StaticResource AccentBrush}"
-                                                                   FontSize="13" Margin="0,8,0,0" />
-                                                        <TextBlock Text="{Binding RecommendationTips}" Style="{StaticResource MutedText}" FontSize="12"
-                                                                   Margin="0,8,0,0" />
-                                                        <TextBlock Text="{Binding ExecutablePath}" Style="{StaticResource MutedText}" FontSize="11"
-                                                                   Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2" VerticalAlignment="Top">
-                                                        <Button Content="Aplicar recomendado" Style="{StaticResource PrimaryButton}"
-                                                                Command="{Binding DataContext.GameProfiles.ApplyRecommendedForSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                        <Button Content="Reverter este jogo" Style="{StaticResource DangerButton}" Margin="0,8,0,0"
-                                                                Command="{Binding DataContext.GameProfiles.RevertForSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-
-                                            <UniformGrid Columns="4" Margin="0,14,0,10">
-                                                <CheckBox Content="FSO off (manual)" IsChecked="{Binding GameProfiles.SelectAllFso}" Margin="0,0,8,0" />
-                                                <CheckBox Content="High DPI (manual)" IsChecked="{Binding GameProfiles.SelectAllDpi}" Margin="0,0,8,0" />
-                                                <CheckBox Content="Prioridade alta (manual)" IsChecked="{Binding GameProfiles.SelectAllPriority}" Margin="0,0,8,0" />
-                                                <CheckBox Content="GPU alta (manual)" IsChecked="{Binding GameProfiles.SelectAllGpu}" />
-                                            </UniformGrid>
-
-                                            <TextBlock Text="{Binding GameProfiles.LastResult}" Style="{StaticResource MutedText}" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Cleanup -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Cleanup}">
-                                    <TextBlock Text="Limpeza de disco" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Temporários, caches e lixeira. Nada de arquivos pessoais." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <Button Content="Analisar" Style="{StaticResource PrimaryButton}" Command="{Binding Cleanup.ScanCommand}" />
-                                                <Button Content="Limpar" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding Cleanup.CleanCommand}" />
-                                                <Button Content="Cancelar" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Command="{Binding Cleanup.CancelCommand}" />
-                                                <Button Content="Todos" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding Cleanup.SelectAllCommand}" />
-                                                <Button Content="Nenhum" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Command="{Binding Cleanup.SelectNoneCommand}" />
-                                            </StackPanel>
-
-                                            <TextBlock Text="{Binding Cleanup.ScanStatus}" Style="{StaticResource MutedText}" Margin="0,0,0,8" />
-
-                                            <TextBlock Margin="0,0,0,10">
-                                                <Run Text="Selecionado: " />
-                                                <Run Text="{Binding Cleanup.TotalSizeDisplay, Mode=OneWay}" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" FontSize="15" />
-                                            </TextBlock>
-
-                                            <ItemsControl ItemsSource="{Binding Cleanup.Targets}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" Margin="0,4">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <StackPanel>
-                                                                    <TextBlock Text="{Binding Name}" />
-                                                                    <TextBlock Text="{Binding Path}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                                                </StackPanel>
-                                                                <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
-                                                            </Grid>
-                                                        </CheckBox>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-
-                                            <TextBlock Text="{Binding Cleanup.LastResult}" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Debloat -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Debloat}">
-                                    <TextBlock Text="Serviços e debloat" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Lista conservadora de telemetria e background. Leia a descrição antes de desativar." />
-                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
-                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
-                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <Button Content="Recarregar" Style="{StaticResource SecondaryButton}" Command="{Binding Debloat.LoadCommand}" />
-                                                <Button Content="Desativar selecionados" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Command="{Binding Debloat.DisableSelectedCommand}" />
-                                            </StackPanel>
-
-                                            <ItemsControl ItemsSource="{Binding Debloat.Services}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="12" Margin="0,0,0,8">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Top" Margin="0,2,10,0" />
-                                                                <StackPanel Grid.Column="1">
-                                                                    <TextBlock FontWeight="SemiBold">
-                                                                        <Run Text="{Binding DisplayName, Mode=OneWay}" />
-                                                                        <Run Text=" (" Foreground="{StaticResource TextMutedBrush}" />
-                                                                        <Run Text="{Binding Name, Mode=OneWay}" Foreground="{StaticResource TextMutedBrush}" />
-                                                                        <Run Text=")" Foreground="{StaticResource TextMutedBrush}" />
-                                                                    </TextBlock>
-                                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12" />
-                                                                    <TextBlock Style="{StaticResource MutedText}" FontSize="11">
-                                                                        <Run Text="Início: " /><Run Text="{Binding StartTypeDisplay, Mode=OneWay}" />
-                                                                        <Run Text="  ·  " /><Run Text="{Binding StatusDisplay, Mode=OneWay}" />
-                                                                        <Run Text="  ·  Risco: " /><Run Text="{Binding RiskDisplay, Mode=OneWay}" />
-                                                                    </TextBlock>
-                                                                </StackPanel>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Startup -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Startup}">
-                                    <TextBlock Text="Inicialização" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Controle o que abre com o Windows. Desativar acelera o boot e libera RAM." />
-                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
-                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
-                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <Button Content="Recarregar lista" Style="{StaticResource SecondaryButton}"
-                                                    HorizontalAlignment="Left" Margin="0,0,0,12"
-                                                    Command="{Binding StartupVm.LoadCommand}" />
-
-                                            <ItemsControl ItemsSource="{Binding StartupVm.Items}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="12" Margin="0,0,0,8">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <StackPanel>
-                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                                    <TextBlock Text="{Binding Command}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                                                    <TextBlock Style="{StaticResource MutedText}" FontSize="11">
-                                                                        <Run Text="Fonte: " /><Run Text="{Binding Source, Mode=OneWay}" />
-                                                                    </TextBlock>
-                                                                </StackPanel>
-                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                    <Button Content="Desativar" Style="{StaticResource SecondaryButton}"
-                                                                            Command="{Binding DataContext.StartupVm.DisableCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}" Margin="0,0,6,0"
-                                                                            Visibility="{Binding IsEnabled, Converter={StaticResource BoolToVis}}" />
-                                                                    <Button Content="Reativar" Style="{StaticResource SecondaryButton}"
-                                                                            Command="{Binding DataContext.StartupVm.EnableCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}"
-                                                                            Visibility="{Binding IsEnabled, Converter={StaticResource NotBoolToVis}}" />
-                                                                </StackPanel>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Monitor -->
-                                <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Monitor}">
-                                    <TextBlock Text="Medidor de desempenho" Style="{StaticResource TitleText}" />
-                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="CPU, RAM, disco e rede ao vivo — veja o efeito das otimizações." />
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <TextBlock Text="CPU" Style="{StaticResource MutedText}" />
-                                            <ProgressBar Value="{Binding Monitor.Cpu, Mode=OneWay}" Maximum="100" />
-                                            <TextBlock Text="{Binding Monitor.CpuDisplay}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,12" Foreground="{StaticResource AccentBrush}" />
-
-                                            <TextBlock Text="Memória" Style="{StaticResource MutedText}" />
-                                            <ProgressBar Value="{Binding Monitor.Ram, Mode=OneWay}" Maximum="100" />
-                                            <TextBlock Text="{Binding Monitor.RamDisplay}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,12" Foreground="{StaticResource AccentBrush}" />
-
-                                            <TextBlock Text="Disco" Style="{StaticResource MutedText}" />
-                                            <ProgressBar Value="{Binding Monitor.Disk, Mode=OneWay}" Maximum="100" />
-                                            <TextBlock Text="{Binding Monitor.DiskDisplay}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,12" Foreground="{StaticResource AccentBrush}" />
-
-                                            <TextBlock Text="Rede" Style="{StaticResource MutedText}" />
-                                            <ProgressBar Value="{Binding Monitor.NetworkKbps, Mode=OneWay}" Maximum="125000" />
-                                            <TextBlock Text="{Binding Monitor.NetDisplay}" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,12" Foreground="{StaticResource AccentBrush}" />
-
-                                            <TextBlock Style="{StaticResource MutedText}">
-                                                <Run Text="Processos ativos: " />
-                                                <Run Text="{Binding Monitor.ProcessCount, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                            </Grid>
-                        </DataTemplate>
-                    </ContentControl.Resources>
-                </ContentControl>
-            </ScrollViewer>
-
-            <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="0,1,0,0" Padding="18,9">
+            <!-- Gravação em andamento: barra fina com mensagem. A navegação continua livre. -->
+            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="0,0,0,1"
+                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" Padding="24,8">
                 <DockPanel>
-                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <TextBlock Style="{StaticResource MutedText}" Margin="0,0,14,0">
-                            <Run Text="Admin: " />
-                            <Run Text="{Binding IsAdmin, Mode=OneWay}" FontWeight="SemiBold" />
-                        </TextBlock>
-                        <TextBlock Text="{Binding Dashboard.PowerPlan}" Style="{StaticResource MutedText}" />
+                    <Button Content="Cancelar" Style="{StaticResource DangerButton}" DockPanel.Dock="Right" Padding="12,4" Margin="12,0,0,0"
+                            Command="{Binding CancelOperationCommand}" Visibility="{Binding CanCancelOperation, Converter={StaticResource BoolToVis}}" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding StatusMessage}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        <ProgressBar IsIndeterminate="True" Height="3" Margin="0,6,0,0" />
                     </StackPanel>
                 </DockPanel>
             </Border>
 
-            <Border Grid.Row="0" Grid.RowSpan="2" Background="#AA070B14" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="⚡" FontSize="36" HorizontalAlignment="Center" />
-                    <TextBlock Text="{Binding StatusMessage}" HorizontalAlignment="Center" Margin="24,10,24,0" FontSize="15"
-                               MaxWidth="660" TextWrapping="Wrap" TextAlignment="Center" />
-                    <Button Content="Cancelar" Style="{StaticResource DangerButton}" HorizontalAlignment="Center"
-                            Margin="0,18,0,0" Command="{Binding CancelOperationCommand}"
-                            Visibility="{Binding CanCancelOperation, Converter={StaticResource BoolToVis}}" />
-                </StackPanel>
+            <ContentControl Grid.Row="1" Content="{Binding CurrentViewModel}" IsTabStop="False" />
+
+            <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="0,1,0,0" Padding="18,9">
+                <DockPanel>
+                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>

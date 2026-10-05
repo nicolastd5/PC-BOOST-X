@@ -84,23 +84,44 @@ await Test("Operation failure clears busy and reports failure", async () =>
     await main.RunOperationAsync("working", () => throw new InvalidOperationException("denied"));
     Require(!main.IsBusy, "Busy permaneceu ativo após exceção");
     Require(main.StatusMessage.Contains("denied"), "Falha não foi informada");
-    Require(main.NavigateCommand.CanExecute("Gaming"), "Navegação não reabilitada");
+    Require(main.NavigateCommand.CanExecute("Optimizations"), "Navegação não reabilitada");
 });
-await Test("Busy blocks navigation and overlapping operations", async () =>
+await Test("A write blocks another write, but navigation stays free", async () =>
 {
     var main = new MainViewModel();
     var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     var running = main.RunOperationAsync("working", () => release.Task);
     Require(main.IsBusy, "Operação não marcou busy");
-    Require(!main.NavigateCommand.CanExecute("Gaming"), "Navegação habilitada durante operação");
-    main.NavigateCommand.Execute("Gaming");
-    Require(main.CurrentPage == "Dashboard", "Página alterada durante operação");
+    Require(main.NavigateCommand.CanExecute("Optimizations"), "Navegação bloqueada durante gravação");
+    main.NavigateCommand.Execute("Optimizations");
+    Require(main.CurrentPage == "Optimizations", "Página não mudou durante a gravação");
     var secondRan = false;
     await main.RunOperationAsync("second", () => { secondRan = true; return Task.CompletedTask; });
-    Require(!secondRan, "Operações sobrepostas foram permitidas");
+    Require(!secondRan, "Gravações sobrepostas foram permitidas");
     release.SetResult();
     await running;
     Require(!main.IsBusy, "Busy permaneceu ativo");
+});
+await Test("Screen view models are built only on first navigation", async () =>
+{
+    Constructed.Names.Clear();
+    var main = new MainViewModel();
+    Require(Constructed.Names.SequenceEqual(["Home"]), "Abrir o app construiu mais do que a tela Início: " + string.Join(",", Constructed.Names));
+    main.NavigateCommand.Execute("Optimizations");
+    Require(Constructed.Names.SequenceEqual(["Home", "Optimizations"]), "Navegar não construiu a tela de destino");
+    main.NavigateCommand.Execute("Home");
+    main.NavigateCommand.Execute("Optimizations");
+    Require(Constructed.Names.Count(n => n == "Optimizations") == 1, "A tela foi construída de novo");
+    Require(ReferenceEquals(main.CurrentViewModel, main.Optimizations), "CurrentViewModel não é a tela ativa");
+    await Task.Delay(50);
+    Require(main.Optimizations.Activations == 2 && main.Optimizations.Deactivations == 1, "Ativação e desativação da tela não foram notificadas");
+});
+await Test("Navigating to an unknown page is ignored", () =>
+{
+    var main = new MainViewModel();
+    main.NavigateCommand.Execute("Inexistente");
+    Require(main.CurrentViewModel is HomeViewModel, "Página desconhecida trocou a tela");
+    return Task.CompletedTask;
 });
 await Test("Cancellation remains busy until cleanup exits", async () =>
 {
@@ -124,7 +145,8 @@ await Test("Cancellation remains busy until cleanup exits", async () =>
 await Test("Restore point explicit opt out skips Windows command", async () =>
 {
     var main = new MainViewModel();
-    main.Dashboard.RestorePointEnabled = false;
+    var settings = BoostParaPc.Services.AppSettings.Current;
+    settings.RequireRestorePoint = false;
     await main.RequireRestorePointAsync("This must never create a real restore point");
 });
 Console.WriteLine($"{testCount - failures.Count}/{testCount} passed");

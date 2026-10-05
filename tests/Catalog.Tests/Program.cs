@@ -374,6 +374,29 @@ cases.AddRange(
         var ok = await UpdateService.CheckAsync(current, "dono/repo", new FakeHandler("{\"tag_name\":\"v3.1.0\",\"html_url\":\"https://github.com/dono/repo/releases/v3.1.0\"}"));
         Equal("v3.1.0", ok?.Version);
     }),
+    ("Filtro de otimizações: categoria + risco + texto sem acento", () =>
+    {
+        var all = OptimizationCatalog.All;
+        Equal(all.Count, all.Count(i => OptimizationFilter.Matches(i, null, null, null)));
+        Require(all.Where(i => OptimizationFilter.Matches(i, OptimizationCategory.Services, null, null)).All(i => i.Category == OptimizationCategory.Services), "Categoria vazou.");
+        Require(all.Where(i => OptimizationFilter.Matches(i, null, RiskLevel.Advanced, null)).All(i => i.Risk == RiskLevel.Advanced), "Risco vazou.");
+        Require(OptimizationFilter.Matches(all.Single(i => i.Id == "power.sleep"), null, null, "SUSPENSAO tomada"), "Busca sem acento e sem caixa falhou.");
+        Require(!OptimizationFilter.Matches(all.Single(i => i.Id == "power.sleep"), null, null, "xbox"), "Busca aceitou texto que não está no item.");
+        Require(!OptimizationFilter.Matches(all.Single(i => i.Id == "power.sleep"), OptimizationCategory.Gaming, null, "suspensão"), "Filtros não foram combinados.");
+        return Task.CompletedTask;
+    }),
+    ("Sparkline: pontos escalam o máximo, cortam excesso e preservam a ordem", () =>
+    {
+        var p = SparklineMath.ToPoints([0, 50, 100, 200], 90, 10, 100);
+        Equal(4, p.Count);
+        Equal((0.0, 10.0), p[0]);
+        Equal((30.0, 5.0), p[1]);
+        Equal((60.0, 0.0), p[2]);
+        Equal((90.0, 0.0), p[3]);
+        Equal(0, SparklineMath.ToPoints([], 90, 10, 100).Count);
+        Equal((0.0, 5.0), SparklineMath.ToPoints([50], 90, 10, 100)[0]);
+        return Task.CompletedTask;
+    }),
     ("Limpar memória em espera é ação pontual", async () =>
     {
         var standby = OptimizationCatalog.All.Single(i => i.Id == "tools.standby");

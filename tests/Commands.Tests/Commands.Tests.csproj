@@ -10,6 +10,7 @@
     <Compile Include="../../src/ProjectBoostX/Services/ProcessRunner.cs" Link="ProcessRunner.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/RestorePointService.cs" Link="RestorePointService.cs" />
     <Compile Include="../../src/ProjectBoostX/ViewModels/MainViewModel.cs" Link="MainViewModel.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/AppSettings.cs" Link="AppSettings.cs" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
   </ItemGroup>
 </Project>

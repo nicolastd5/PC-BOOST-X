@@ -1,0 +1,116 @@
+<UserControl x:Class="BoostParaPc.Views.GamesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="24,18,24,8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Jogos" Style="{StaticResource PageTitle}" />
+            <TextBlock Style="{StaticResource PageSubtitle}" Margin="0,0,0,10"
+                       Text="Clique numa capa para ver e aplicar as otimizações recomendadas daquele jogo." />
+            <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,8">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
+            <WrapPanel Margin="0,0,0,10">
+                <Button Content="Detectar jogos" Style="{StaticResource PrimaryButton}" Command="{Binding DetectCommand}" Margin="0,0,8,6" />
+                <Button Content="Aplicar recomendado nos marcados" Style="{StaticResource SecondaryButton}" Command="{Binding ApplyRecommendedSelectedCommand}" Margin="0,0,8,6" />
+                <Button Content="Reverter marcados" Style="{StaticResource DangerButton}" Command="{Binding RevertSelectedCommand}" Margin="0,0,8,6" />
+                <Button Content="Priorizar jogos abertos" Style="{StaticResource SecondaryButton}" Command="{Binding BoostRunningCommand}" Margin="0,0,8,6" />
+                <Button Content="Marcar todos" Style="{StaticResource SecondaryButton}" Command="{Binding SelectAllCommand}" Margin="0,0,8,6" />
+                <Button Content="Desmarcar" Style="{StaticResource SecondaryButton}" Command="{Binding SelectNoneCommand}" Margin="0,0,0,6" />
+            </WrapPanel>
+            <TextBlock Text="{Binding LastResult}" Style="{StaticResource MutedText}" Margin="0,0,0,10" />
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Grade de capas -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Games}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.OpenGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}" Margin="0,0,12,12" Padding="0" BorderThickness="0"
+                                    Cursor="Hand" Background="Transparent" ToolTip="{Binding Name}"
+                                    AutomationProperties.Name="{Binding Name}">
+                                <StackPanel Width="148">
+                                    <Border Width="148" Height="200" CornerRadius="10" ClipToBounds="True"
+                                            BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" Background="{StaticResource BgBrush}">
+                                        <Grid>
+                                            <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}" Stretch="Uniform"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Border VerticalAlignment="Bottom" Background="#CC070B14" Padding="8,6">
+                                                <TextBlock Text="{Binding Platform}" FontSize="10" Foreground="{StaticResource AccentBrush}" />
+                                            </Border>
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,6,6,0" AutomationProperties.Name="{Binding Name, StringFormat=Marcar {0}}" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                               Margin="0,6,0,0" HorizontalAlignment="Left" />
+                                    <TextBlock Text="{Binding Status}" FontSize="10" Style="{StaticResource MutedText}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Painel do jogo -->
+            <Border Grid.Column="1" Style="{StaticResource Card}" Width="340" Margin="14,0,0,0" VerticalAlignment="Top"
+                    Visibility="{Binding HasSelectedGame, Converter={StaticResource BoolToVis}}">
+                <StackPanel DataContext="{Binding SelectedGame}">
+                    <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" HorizontalAlignment="Left" Background="{StaticResource BgBrush}">
+                        <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}" Stretch="Uniform" />
+                    </Border>
+                    <TextBlock FontSize="18" FontWeight="Bold" Text="{Binding Name}" Margin="0,10,0,0" />
+                    <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,0">
+                        <Run Text="Plataforma: " /><Run Text="{Binding Platform, Mode=OneWay}" Foreground="{StaticResource Accent2Brush}" />
+                        <Run Text="  ·  " /><Run Text="{Binding Status, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding RecommendationSummary}" Foreground="{StaticResource AccentBrush}" FontSize="13" Margin="0,8,0,0" />
+                    <TextBlock Text="{Binding RecommendationTips}" Style="{StaticResource MutedText}" Margin="0,8,0,0" />
+                    <TextBlock Text="{Binding ExecutablePath}" Style="{StaticResource MutedText}" FontSize="11" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+
+                    <Button Content="Aplicar recomendado" Style="{StaticResource PrimaryButton}" Margin="0,12,0,0"
+                            Command="{Binding DataContext.ApplyRecommendedForSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+
+                    <Expander Header="Opções manuais" Margin="0,10,0,0" Foreground="{StaticResource TextBrush}">
+                        <StackPanel Margin="0,6,0,0">
+                            <CheckBox Content="Tela cheia sem otimizações" IsChecked="{Binding IsFullscreenOptDisabled, Mode=TwoWay}" />
+                            <CheckBox Content="Ignorar escala de DPI" IsChecked="{Binding IsHighDpiOverridden, Mode=TwoWay}" />
+                            <CheckBox Content="Prioridade alta" IsChecked="{Binding IsHighPriority, Mode=TwoWay}" />
+                            <CheckBox Content="GPU de alto desempenho" IsChecked="{Binding IsGpuPreferred, Mode=TwoWay}" />
+                            <Button Content="Aplicar manual neste jogo" Style="{StaticResource SecondaryButton}" Margin="0,8,0,0"
+                                    Command="{Binding DataContext.ApplyManualForSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </StackPanel>
+                    </Expander>
+
+                    <Button Content="Reverter este jogo" Style="{StaticResource DangerButton}" Margin="0,10,0,0"
+                            Command="{Binding DataContext.RevertForSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

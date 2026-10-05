@@ -3,16 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:BoostParaPc"
              xmlns:conv="clr-namespace:BoostParaPc.Converters"
-             StartupUri="MainWindow.xaml">
+             StartupUri="MainWindow.xaml"
+             ThemeMode="Dark">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/DarkTheme.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <local:PageToVisibilityConverter x:Key="PageToVis" />
-            <local:BoolToVisibilityConverter x:Key="BoolToVis" />
-            <local:BoolToVisibilityConverter x:Key="NotBoolToVis" Invert="True" />
             <conv:PathToImageSourceConverter x:Key="PathToImage" />
         </ResourceDictionary>
     </Application.Resources>

@@ -1,0 +1,14 @@
+<Window x:Class="BoostParaPc.Views.FirstRunDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bem-vindo ao Project Boost X" Width="520" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <StackPanel Margin="28">
+        <TextBlock Text="Antes de começar" Style="{StaticResource PageTitle}" />
+        <TextBlock Margin="0,8,0,0" Text="1. O programa altera configurações do Windows (Registro, energia, serviços) para deixá-lo mais leve." />
+        <TextBlock Margin="0,10,0,0" Text="2. Tudo tem backup e pode ser revertido, item por item ou de uma vez em Configurações." />
+        <TextBlock Margin="0,10,0,0" Text="3. Ajustes de risco Moderado e Avançado são opcionais e nunca entram sozinhos." />
+        <Button Content="Entendi" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,22,0,0"
+                IsDefault="True" Click="OnAccept" AutomationProperties.Name="Entendi, continuar" />
+    </StackPanel>
+</Window>

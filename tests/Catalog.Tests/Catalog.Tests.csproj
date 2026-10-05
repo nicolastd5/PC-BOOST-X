@@ -20,6 +20,8 @@
     <Compile Include="../../src/ProjectBoostX/Services/ActionLog.cs" Link="Production/ActionLog.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/AppxService.cs" Link="Production/AppxService.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/AppSettings.cs" Link="Production/AppSettings.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/OptimizationFilter.cs" Link="Production/OptimizationFilter.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/SparklineMath.cs" Link="Production/SparklineMath.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/DnsBenchmark.cs" Link="Production/DnsBenchmark.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/SystemSnapshot.cs" Link="Production/SystemSnapshot.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/SupportExport.cs" Link="Production/SupportExport.cs" />

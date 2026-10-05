@@ -1,0 +1,62 @@
+<UserControl x:Class="BoostParaPc.Views.CleanupView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,18,24,8">
+        <StackPanel>
+            <TextBlock Text="Limpeza de disco" Style="{StaticResource PageTitle}" />
+            <TextBlock Style="{StaticResource PageSubtitle}"
+                       Text="Temporários, caches de navegadores e jogos, relatórios de erro e lixeira. Nada de arquivos pessoais." />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,10">
+                        <ProgressBar.Style>
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
+                    <WrapPanel Margin="0,0,0,12">
+                        <Button Content="Analisar" Style="{StaticResource PrimaryButton}" Command="{Binding ScanCommand}" Margin="0,0,8,6" />
+                        <Button Content="Limpar selecionados" Style="{StaticResource SecondaryButton}" Command="{Binding CleanCommand}" Margin="0,0,8,6" />
+                        <Button Content="Cancelar" Style="{StaticResource DangerButton}" Command="{Binding CancelCommand}" Margin="0,0,8,6" />
+                        <Button Content="Todos" Style="{StaticResource SecondaryButton}" Command="{Binding SelectAllCommand}" Margin="0,0,8,6" />
+                        <Button Content="Nenhum" Style="{StaticResource SecondaryButton}" Command="{Binding SelectNoneCommand}" Margin="0,0,0,6" />
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource MutedText}" Margin="0,0,0,8" />
+                    <TextBlock Margin="0,0,0,10">
+                        <Run Text="Selecionado: " />
+                        <Run Text="{Binding TotalSizeDisplay, Mode=OneWay}" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" FontSize="15" />
+                    </TextBlock>
+
+                    <ItemsControl ItemsSource="{Binding Targets}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" Margin="0,4" HorizontalContentAlignment="Stretch">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" />
+                                            <TextBlock Text="{Binding Path}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    </Grid>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding LastResult}" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,205 @@
+<UserControl x:Class="BoostParaPc.Views.HomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,18,24,8">
+        <StackPanel>
+            <TextBlock Text="Início" Style="{StaticResource PageTitle}" />
+            <TextBlock Text="Um clique para deixar o Windows mais leve, para jogos e trabalho." Style="{StaticResource PageSubtitle}" />
+
+            <!-- Saúde do PC + ação principal -->
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                        <TextBlock Text="Nota de saúde" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding HealthScore}" FontSize="44" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                   AutomationProperties.Name="Nota de saúde do PC" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding HealthText}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource MutedText}" Margin="0,4,0,0">
+                            <Run Text="{Binding AppliedCount, Mode=OneWay}" /><Run Text=" de " /><Run Text="{Binding TotalCount, Mode=OneWay}" /><Run Text=" otimizações aplicadas" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding LastAction}" Style="{StaticResource MutedText}" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <Button Content="Otimizar agora" Style="{StaticResource PrimaryButton}" Command="{Binding OptimizeNowCommand}"
+                                ToolTip="Aplica o preset Seguro depois de mostrar o que será alterado" />
+                        <Button Content="Analisar de novo" Style="{StaticResource SecondaryButton}" Margin="0,8,0,0" Command="{Binding RunDiagnosticsCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Pontos de atenção -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Pontos de atenção" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="Nenhum problema encontrado neste PC.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Findings.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <ItemsControl ItemsSource="{Binding Findings}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource ItemCard}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="&#xE946;" Margin="0,2,12,0" VerticalAlignment="Top">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource IconText}">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                                            <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                                                            <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedText}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="{Binding FixLabel}" VerticalAlignment="Center"
+                                                Command="{Binding DataContext.FixCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding FixLabel}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Hardware -->
+            <UniformGrid Columns="4" Margin="0,0,0,14">
+                <Border Style="{StaticResource Card}" Margin="0,0,7,0">
+                    <StackPanel>
+                        <TextBlock Text="Sistema" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.OsName, RelativeSource={RelativeSource AncestorType=Window}}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.OsVersion, RelativeSource={RelativeSource AncestorType=Window}, StringFormat=Build {0}}" Style="{StaticResource MutedText}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="3,0,3,0">
+                    <StackPanel>
+                        <TextBlock Text="CPU" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.CpuCores, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0} núcleos}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.CpuName, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="3,0,3,0">
+                    <StackPanel>
+                        <TextBlock Text="RAM / GPU" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.TotalRamGb, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0} GB}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.GpuName, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="7,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Disco" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.DiskType, RelativeSource={RelativeSource AncestorType=Window}}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DataContext.SystemInfo.DiskFreeGb, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0} GB livres}" Style="{StaticResource MutedText}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Ao vivo -->
+            <UniformGrid Columns="4" Margin="0,0,0,14">
+                <Border Style="{StaticResource Card}" Margin="0,0,7,0">
+                    <StackPanel><TextBlock Text="CPU agora" Style="{StaticResource MutedText}" /><TextBlock Text="{Binding LiveCpu}" Style="{StaticResource StatValue}" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="3,0,3,0">
+                    <StackPanel><TextBlock Text="Memória agora" Style="{StaticResource MutedText}" /><TextBlock Text="{Binding LiveRam}" Style="{StaticResource StatValue}" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="3,0,3,0">
+                    <StackPanel><TextBlock Text="Disco agora" Style="{StaticResource MutedText}" /><TextBlock Text="{Binding LiveDisk}" Style="{StaticResource StatValue}" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="7,0,0,0">
+                    <StackPanel><TextBlock Text="Rede agora" Style="{StaticResource MutedText}" /><TextBlock Text="{Binding LiveNet}" Style="{StaticResource StatValue}" /></StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Antes e depois -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <Grid>
+                        <TextBlock Text="Antes e depois" Style="{StaticResource SectionTitle}" />
+                        <Button Content="Atualizar" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,-6,0,0"
+                                Command="{Binding TakeSnapshotCommand}" />
+                    </Grid>
+                    <TextBlock Text="{Binding ComparisonNote}" Style="{StaticResource MutedText}" Margin="0,0,0,10" />
+                    <ItemsControl ItemsSource="{Binding Comparison}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="90" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Label}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Before}" Style="{StaticResource MutedText}" HorizontalAlignment="Right" />
+                                    <TextBlock Grid.Column="2" Text="{Binding After}" HorizontalAlignment="Right" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Change, StringFormat={}{0:+#;-#;0}}" HorizontalAlignment="Right" Foreground="{StaticResource AccentBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Plano de energia" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding PowerPlan}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Modo de Jogo do Windows" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding GameModeStatus}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Content="Criar ponto de restauração" Style="{StaticResource SecondaryButton}" Command="{Binding CreateRestorePointCommand}" />
+                        <Button Content="Reverter tudo" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Command="{Binding RevertAllCommand}"
+                                ToolTip="Restaura as configurações originais salvas e mantém backups que não puderem ser restaurados" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
