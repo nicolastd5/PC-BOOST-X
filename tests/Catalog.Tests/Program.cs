@@ -194,10 +194,10 @@ foreach (var item in OptimizationCatalog.All.Where(i => !i.IsAction))
 
 cases.AddRange(
 [
-    ("Catálogo tem 37 itens com id único e bem formado", () =>
+    ("Catálogo tem 45 itens com id único e bem formado", () =>
     {
-        Equal(37, OptimizationCatalog.All.Count);
-        Equal(37, OptimizationCatalog.All.Select(i => i.Id).Distinct().Count());
+        Equal(45, OptimizationCatalog.All.Count);
+        Equal(45, OptimizationCatalog.All.Select(i => i.Id).Distinct().Count());
         var bad = OptimizationCatalog.All.FirstOrDefault(i => !System.Text.RegularExpressions.Regex.IsMatch(i.Id, @"\A[a-z0-9.]+\z"));
         Require(bad is null, $"Id inválido: {bad?.Id}");
         return Task.CompletedTask;
@@ -263,6 +263,55 @@ cases.AddRange(
         Equal(ApplyState.NotApplied, await OptimizationEngine.ApplyAsync(dns));
         Require(ProcessRunner.Calls.Contains("ipconfig /flushdns"), "ipconfig não foi chamado.");
     }),
+    ("DirectXUserGlobalSettings: acrescenta o campo e preserva os que já existem", () =>
+    {
+        Equal("VRROptimizeEnable=1;SwapEffectUpgradeEnable=1;", OptimizationCatalog.MergeGlobalSettings("VRROptimizeEnable=1;"));
+        Equal("SwapEffectUpgradeEnable=1;", OptimizationCatalog.MergeGlobalSettings(null));
+        Equal("A=1;SwapEffectUpgradeEnable=1;", OptimizationCatalog.MergeGlobalSettings("SwapEffectUpgradeEnable=0;A=1;"));
+        return Task.CompletedTask;
+    }),
+    ("Itens só do Windows 11 e HVCI travado são marcados como não recomendados", () =>
+    {
+        var win10 = Pc(win11: false);
+        foreach (var id in new[] { "gpu.windowed", "ui.widgets" })
+            Require(OptimizationCatalog.All.Single(i => i.Id == id).NotRecommended!(win10) is not null, $"{id} não foi bloqueado no Windows 10.");
+        var hvci = OptimizationCatalog.All.Single(i => i.Id == "sec.memoryintegrity");
+        Require(hvci.Risk == RiskLevel.Advanced && hvci.RequiresRestart, "HVCI deve ser Avançado e exigir reinício.");
+        Require(hvci.NotRecommended!(Pc()) is null, "HVCI não travado foi bloqueado.");
+        Seed(@"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Locked", 1, Registry.LocalMachine);
+        Require(hvci.NotRecommended!(Pc()) is not null, "HVCI travado pelo firmware não foi bloqueado.");
+        return Task.CompletedTask;
+    }),
+    ("Nome de pacote inválido é rejeitado antes de virar comando", () =>
+    {
+        Require(AppxService.IsValidPackageName("Microsoft.BingNews"), "Pacote da lista foi recusado.");
+        Require(!AppxService.IsValidPackageName("Microsoft.BingNews'; Stop-Computer; '"), "Injeção aceita.");
+        Require(!AppxService.IsValidPackageName("Microsoft.WindowsStore"), "Pacote fora da lista foi aceito.");
+        var failed = false;
+        try { AppxService.BuildRemoveScript(["Microsoft.BingNews", "x; calc"]); } catch (ArgumentException) { failed = true; }
+        Require(failed, "Script com nome inválido foi gerado.");
+        Require(AppxService.BuildRemoveScript(["Microsoft.BingNews"]) == "Get-AppxPackage -Name 'Microsoft.BingNews' | Remove-AppxPackage", "Script inesperado.");
+        return Task.CompletedTask;
+    }),
+    ("AppSettings: ausente, corrompido e de versão futura devolvem os padrões; salvar e reler preserva", () =>
+    {
+        Require(AppSettings.Load().RequireRestorePoint, "Padrão ausente incorreto.");
+        File.WriteAllText(AppSettings.FilePath, "{ isto não é json");
+        Require(AppSettings.Load().RequireRestorePoint, "Arquivo corrompido não voltou ao padrão.");
+        File.WriteAllText(AppSettings.FilePath, "{\"Version\":99,\"RequireRestorePoint\":false}");
+        Require(AppSettings.Load().RequireRestorePoint, "Versão futura não voltou ao padrão.");
+        var s = new AppSettings { RequireRestorePoint = false, FirstRunAcknowledged = true };
+        s.Save();
+        var back = AppSettings.Load();
+        Require(!back.RequireRestorePoint && back.FirstRunAcknowledged, "Valores salvos não foram relidos.");
+        return Task.CompletedTask;
+    }),
+    ("Limpar memória em espera é ação pontual", async () =>
+    {
+        var standby = OptimizationCatalog.All.Single(i => i.Id == "tools.standby");
+        Equal(ApplyState.NotApplied, await OptimizationEngine.ApplyAsync(standby));
+        Require(ProcessRunner.Calls.Contains("purge-standby"), "A lista de espera não foi esvaziada.");
+    }),
     ("Nagle sem interface de rede ativa falha com mensagem", async () =>
     {
         var nagle = OptimizationCatalog.All.Single(i => i.Id == "net.nagle");
@@ -293,9 +342,9 @@ static OptimizationItem Make(string id, params RegValue[] values) => new()
 static RegValue Dw(string name, int value, string key = K) =>
     new(Registry.CurrentUser, key, name, value, RegistryValueKind.DWord);
 
-static void Seed(string path, string name, int value)
+static void Seed(string path, string name, int value, RegistryKey? root = null)
 {
-    using var key = Registry.CurrentUser.CreateSubKey(path);
+    using var key = (root ?? Registry.CurrentUser).CreateSubKey(path);
     key.SetValue(name, value, RegistryValueKind.DWord);
 }
 

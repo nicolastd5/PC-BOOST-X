@@ -18,6 +18,8 @@
     <Compile Include="../../src/ProjectBoostX/Services/OptimizationStateStore.cs" Link="Production/OptimizationStateStore.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/OptimizationEngine.cs" Link="Production/OptimizationEngine.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/ActionLog.cs" Link="Production/ActionLog.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/AppxService.cs" Link="Production/AppxService.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/AppSettings.cs" Link="Production/AppSettings.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/Catalog/*.cs" LinkBase="Production/Catalog" />
   </ItemGroup>
 </Project>

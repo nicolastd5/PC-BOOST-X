@@ -13,7 +13,7 @@ public static partial class OptimizationCatalog
     public static IReadOnlyList<OptimizationItem> All { get; } =
     [
         .. PowerItems(), .. GamingItems(), .. InputVisualItems(),
-        .. PrivacyItems(), .. ServiceItems(), .. SystemNetworkItems()
+        .. PrivacyItems(), .. ServiceItems(), .. SystemNetworkItems(), .. ExtraItems(), .. ToolItems()
     ];
 
     /// <summary>Itens que um clique pode aplicar. Avançados e contraindicados para o PC ficam sempre de fora.</summary>

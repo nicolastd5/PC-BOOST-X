@@ -25,6 +25,18 @@ public static class ProcessRunner
         Calls.Add(fileName + " " + arguments);
         return Task.FromResult(new CommandResult(0, "", "", false));
     }
+
+    public static Task<string> RunPowerShellAsync(string script, int timeoutMs = 30_000, CancellationToken cancellationToken = default)
+    {
+        Calls.Add("powershell " + script);
+        return Task.FromResult("");
+    }
+}
+
+public static class MemoryNative
+{
+    public static long StandbyMb() => 1024;
+    public static void PurgeStandbyList() => ProcessRunner.Calls.Add("purge-standby");
 }
 
 public static class PowerNative

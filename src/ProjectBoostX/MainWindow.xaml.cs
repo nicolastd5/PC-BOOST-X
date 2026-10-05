@@ -9,6 +9,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Closing += (_, e) => { if (Application.Current is App app && app.TryHideToTray()) e.Cancel = true; };
+        ContentRendered += (_, _) => { if (App.StartInTray) Hide(); };
         Loaded += async (_, _) =>
         {
             if (DataContext is ViewModels.MainViewModel vm)
