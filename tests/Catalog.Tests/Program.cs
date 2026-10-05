@@ -150,6 +150,127 @@ var cases = new List<(string Name, Func<Task> Run)>
     }),
 };
 
+string[] serviceNames = ["DiagTrack", "dmwappushservice", "SysMain", "WSearch", "Fax", "MapsBroker",
+    "XblAuthManager", "XblGameSave", "XboxNetApiSvc", "XboxGipSvc", "Spooler"];
+string[] removedIds = ["memory.pagedpool", "memory.large", "memory.standby", "sys.priority.sep", "sys.flushdns",
+    "services.remoteregistry", "net.tcp", "net.dns.flush", "net.throttle.off", "telemetry.cortana",
+    "input.mousespeed", "game.notifications"];
+
+void SeedWindows(OptimizationItem item, params string[] missingServices)
+{
+    // Metade dos valores já existe com outro conteúdo; a outra metade não existe.
+    for (var i = 0; i < item.Registry.Count; i += 2)
+    {
+        var v = item.Registry[i];
+        using var key = v.Root.CreateSubKey(v.Key);
+        key.SetValue(v.Name, v.Value is int number ? (object)(number + 1) : "valor-anterior", v.Kind);
+    }
+    foreach (var service in serviceNames.Except(missingServices))
+    {
+        using var key = Registry.LocalMachine.CreateSubKey($@"SYSTEM\CurrentControlSet\Services\{service}");
+        key.SetValue("Start", 2, RegistryValueKind.DWord);
+    }
+    const string interfaces = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
+    Registry.LocalMachine.CreateSubKey(interfaces).Dispose();
+    using (var nic = Registry.LocalMachine.CreateSubKey(interfaces + @"\{nic-1}"))
+        nic.SetValue("DhcpIPAddress", "192.168.0.2", RegistryValueKind.String);
+    using (var power = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\Power"))
+        power.SetValue("HibernateEnabled", 1, RegistryValueKind.DWord);
+}
+
+string Snapshot() => RegistryKey.Dump() + "\n|" +
+    string.Join(",", PowerNative.Values.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value));
+
+foreach (var item in OptimizationCatalog.All.Where(i => !i.IsAction))
+    cases.Add(($"{item.Id}: aplicar, detectar e reverter devolve o sistema ao estado inicial", async () =>
+    {
+        SeedWindows(item);
+        var before = Snapshot();
+        Equal(ApplyState.Applied, await OptimizationEngine.ApplyAsync(item));
+        Require(OptimizationEngine.IsApplied(item), "Não foi detectado como aplicado.");
+        Require(await OptimizationEngine.RevertAsync(item), item.StatusMessage ?? "Reversão falhou.");
+        Equal(before, Snapshot());
+    }));
+
+cases.AddRange(
+[
+    ("Catálogo tem 37 itens com id único e bem formado", () =>
+    {
+        Equal(37, OptimizationCatalog.All.Count);
+        Equal(37, OptimizationCatalog.All.Select(i => i.Id).Distinct().Count());
+        var bad = OptimizationCatalog.All.FirstOrDefault(i => !System.Text.RegularExpressions.Regex.IsMatch(i.Id, @"\A[a-z0-9.]+\z"));
+        Require(bad is null, $"Id inválido: {bad?.Id}");
+        return Task.CompletedTask;
+    }),
+    ("Nenhum valor de Registro é gravado por dois itens", () =>
+    {
+        var clash = OptimizationCatalog.All
+            .SelectMany(i => i.Registry.Select(v => (i.Id, Path: $@"{v.Root.Name}\{v.Key}\{v.Name}".ToLowerInvariant())))
+            .GroupBy(x => x.Path).FirstOrDefault(g => g.Count() > 1);
+        Require(clash is null, $"{clash?.Key} é gravado por {string.Join(" e ", clash?.Select(x => x.Id) ?? [])}");
+        return Task.CompletedTask;
+    }),
+    ("Todo item tem nome, descrição e impacto, e é detectável, ação ou rastreado", () =>
+    {
+        foreach (var i in OptimizationCatalog.All)
+        {
+            Require(i.Name.Length > 0 && i.Description.Length > 0 && i.Impact.Length > 0, $"{i.Id} tem texto vazio.");
+            Require(i.IsAction || i.Registry.Count > 0 || i.IsAppliedExtra is not null || i.Id == "power.high",
+                $"{i.Id} não tem como ser detectado.");
+        }
+        return Task.CompletedTask;
+    }),
+    ("Itens removidos não voltam", () =>
+    {
+        var back = OptimizationCatalog.All.FirstOrDefault(i => removedIds.Contains(i.Id));
+        Require(back is null, $"{back?.Id} voltou ao catálogo.");
+        return Task.CompletedTask;
+    }),
+    ("Presets nunca incluem avançados nem itens não recomendados", () =>
+    {
+        OptimizationEngine.ApplyHardwareRules(OptimizationCatalog.All, Pc(laptop: true));
+        var balanced = OptimizationCatalog.Preset(RiskLevel.Moderate).ToList();
+        Require(balanced.Count > 10, "Preset Equilibrado ficou vazio demais.");
+        Require(balanced.All(i => i.Risk != RiskLevel.Advanced && i.IsRecommended && !i.IsAction), "Preset inclui item indevido.");
+        Require(balanced.All(i => i.Id is not ("power.cpu.max" or "power.pcie.aspm" or "sys.corepark" or "power.sleep" or "sys.hibernation" or "power.high")),
+            "Preset de notebook inclui ajuste de energia contraindicado.");
+        Require(OptimizationCatalog.Preset(RiskLevel.Safe).All(i => i.Risk == RiskLevel.Safe), "Preset Seguro inclui risco maior.");
+        OptimizationEngine.ApplyHardwareRules(OptimizationCatalog.All, Pc());
+        return Task.CompletedTask;
+    }),
+    ("Core parking é bloqueado em notebook, CPU híbrida e X3D; SysMain em HD", () =>
+    {
+        var park = OptimizationCatalog.All.Single(i => i.Id == "sys.corepark");
+        var sysmain = OptimizationCatalog.All.Single(i => i.Id == "services.sysmain");
+        Require(park.NotRecommended!(Pc(laptop: true)) is not null, "Notebook não bloqueou core parking.");
+        Require(park.NotRecommended!(Pc("13th Gen Intel(R) Core(TM) i7-13700K", 16, 24)) is not null, "Híbrida não bloqueou.");
+        Require(park.NotRecommended!(Pc("AMD Ryzen 7 7800X3D 8-Core Processor", 8, 16)) is not null, "X3D não bloqueou.");
+        Require(park.NotRecommended!(Pc()) is null, "Desktop comum foi bloqueado.");
+        Require(sysmain.NotRecommended!(Pc(disk: "HD")) is not null, "HD não bloqueou SysMain.");
+        Require(sysmain.NotRecommended!(Pc()) is null, "SSD bloqueou SysMain.");
+        return Task.CompletedTask;
+    }),
+    ("Serviço que não existe nesta edição do Windows não gera erro", async () =>
+    {
+        var fax = OptimizationCatalog.All.Single(i => i.Id == "services.fax");
+        SeedWindows(fax, missingServices: "Fax");
+        Equal(ApplyState.Applied, await OptimizationEngine.ApplyAsync(fax));
+        Require(await OptimizationEngine.RevertAsync(fax), "Reversão de serviço ausente falhou.");
+    }),
+    ("Limpar DNS é ação pontual e chama ipconfig", async () =>
+    {
+        var dns = OptimizationCatalog.All.Single(i => i.Id == "tools.dnsflush");
+        Equal(ApplyState.NotApplied, await OptimizationEngine.ApplyAsync(dns));
+        Require(ProcessRunner.Calls.Contains("ipconfig /flushdns"), "ipconfig não foi chamado.");
+    }),
+    ("Nagle sem interface de rede ativa falha com mensagem", async () =>
+    {
+        var nagle = OptimizationCatalog.All.Single(i => i.Id == "net.nagle");
+        Equal(ApplyState.Failed, await OptimizationEngine.ApplyAsync(nagle));
+        Require(nagle.StatusMessage!.Contains("interface"), "Mensagem não explica a falha.");
+    }),
+]);
+
 var root = Path.Combine(Path.GetTempPath(), "BoostCatalogTests", Guid.NewGuid().ToString("N"));
 var failures = 0;
 for (var i = 0; i < cases.Count; i++)
