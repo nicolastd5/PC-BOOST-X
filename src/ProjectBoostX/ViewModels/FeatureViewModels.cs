@@ -46,8 +46,9 @@ public partial class DashboardViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        await Task.Run(() => OptimizationStateDetector.ApplyTo(QuickWins)).ConfigureAwait(false);
-        await RefreshInfoAsync().ConfigureAwait(false);
+        await Task.Run(() => OptimizationStateDetector.ApplyTo(QuickWins));
+        AppliedCount = QuickWins.Count(i => i.State == ApplyState.Applied);
+        await RefreshInfoAsync();
     }
 
     public void RefreshInfo()
@@ -78,87 +79,73 @@ public partial class DashboardViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task BoostAsync()
+    private Task BoostAsync() => _main.RunOperationAsync("Aplicando Boost rápido…", async () =>
     {
         var selected = QuickWins.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0)
         {
-            _main.SetBusy(false, "Selecione pelo menos uma otimização");
+            _main.StatusMessage = "Selecione pelo menos uma otimização";
             return;
         }
 
-        _main.SetBusy(true, "Criando ponto de restauração…");
-        try
-        {
-            if (RestorePointEnabled)
-                await RestorePointService.CreateAsync("Project Boost X - Boost rápido");
-        }
-        catch
-        {
-            // ponto de restauração pode falhar em alguns setups
-        }
+        await _main.RequireRestorePointAsync("Project Boost X - Boost rápido");
 
         int ok = 0, fail = 0;
-        var appliedIds = new List<string>();
         foreach (var item in selected)
         {
-            _main.SetBusy(true, $"Aplicando: {item.Name}");
-            var state = await OptimizationCatalog.ApplyAsync(item);
-            item.State = state;
-            if (state == ApplyState.Applied)
+            _main.StatusMessage = $"Aplicando: {item.Name}";
+            try
             {
-                ok++;
-                appliedIds.Add(item.Id);
+                item.State = await OptimizationCatalog.ApplyAsync(item);
+                if (item.State == ApplyState.Applied)
+                {
+                    OptimizationStateStore.MarkMany([item.Id]);
+                    ok++;
+                }
+                else fail++;
             }
-            else fail++;
+            catch (Exception ex)
+            {
+                fail++;
+                item.State = ApplyState.Failed;
+                item.StatusMessage = ex.Message;
+            }
         }
-
-        if (appliedIds.Count > 0)
-            OptimizationStateStore.MarkMany(appliedIds);
 
         // Desmarca o que já ficou aplicado pra não pedir de novo
         foreach (var item in QuickWins.Where(i => i.State == ApplyState.Applied))
             item.IsSelected = false;
 
-        AppliedCount += ok;
+        AppliedCount = QuickWins.Count(i => i.State == ApplyState.Applied);
         LastAction = $"Boost rápido: {ok} aplicadas, {fail} falhas — {DateTime.Now:HH:mm}";
-        _main.SetBusy(false, LastAction);
-        RefreshInfo();
-    }
+        _main.StatusMessage = LastAction;
+        await RefreshInfoAsync();
+    });
 
     [RelayCommand]
-    private async Task CreateRestorePointAsync()
+    private Task CreateRestorePointAsync() => _main.RunOperationAsync("Criando ponto de restauração…", async () =>
     {
-        _main.SetBusy(true, "Criando ponto de restauração…");
         var ok = await RestorePointService.CreateAsync();
-        _main.SetBusy(false, ok ? "Ponto de restauração criado" : "Não foi possível criar o ponto (verifique Proteção do Sistema)");
-    }
+        _main.StatusMessage = ok ? "Ponto de restauração criado e verificado" : "Não foi possível criar o ponto (verifique Proteção do Sistema)";
+    });
 
     [RelayCommand]
-    private async Task RevertAllAsync()
+    private Task RevertAllAsync() => _main.RunOperationAsync("Revertendo todas as otimizações…", async () =>
     {
-        _main.SetBusy(true, "Revertendo todas as otimizações…");
-        try
-        {
-            var progress = new Progress<string>(s => _main.SetBusy(true, s));
-            var result = await RevertAllService.RevertEverythingAsync(progress);
-            await RevertAllService.RevertServiceStartTypesAsync();
+        var progress = new Progress<string>(s => { if (_main.IsBusy) _main.StatusMessage = s; });
+        var result = await RevertAllService.RevertEverythingAsync(progress);
 
+        if (result.Success)
+        {
+            await InitializeAsync();
+            await _main.Gaming.InitializeAsync();
             foreach (var item in QuickWins)
-            {
-                item.State = ApplyState.NotApplied;
-                item.IsSelected = true;
-            }
+                item.IsSelected = item.State != ApplyState.Applied;
+        }
 
-            LastAction = result.Message;
-            _main.SetBusy(false, result.Message);
-            RefreshInfo();
-        }
-        catch (Exception ex)
-        {
-            _main.SetBusy(false, $"Falha ao reverter: {ex.Message}");
-        }
-    }
+        LastAction = result.Message;
+        _main.StatusMessage = result.Message;
+    });
 }
 
 public partial class GamingViewModel : ObservableObject
@@ -185,47 +172,46 @@ public partial class GamingViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        await Task.Run(() =>
-        {
-            OptimizationStateDetector.ApplyTo(Items);
-            foreach (var item in Items.Where(i => i.State == ApplyState.Applied))
-                item.IsSelected = false;
-        }).ConfigureAwait(false);
+        await Task.Run(() => OptimizationStateDetector.ApplyTo(Items));
+        foreach (var item in Items)
+            item.IsSelected = item.State != ApplyState.Applied;
     }
 
     [RelayCommand]
-    private async Task ApplySelectedAsync()
+    private Task ApplySelectedAsync() => _main.RunOperationAsync("Aplicando otimizações de jogo…", async () =>
     {
         var selected = Items.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0)
         {
-            _main.SetBusy(false, "Nada selecionado");
+            _main.StatusMessage = "Nada selecionado";
             return;
         }
 
-        _main.SetBusy(true, "Aplicando otimizações de jogo…");
-        try { await RestorePointService.CreateAsync("Project Boost X - Gaming"); } catch { }
+        await _main.RequireRestorePointAsync("Project Boost X - Gaming");
 
         int ok = 0;
-        var appliedIds = new List<string>();
         foreach (var item in selected)
         {
-            _main.SetBusy(true, $"Aplicando: {item.Name}");
-            var state = await OptimizationCatalog.ApplyAsync(item);
-            item.State = state;
-            if (state == ApplyState.Applied)
+            _main.StatusMessage = $"Aplicando: {item.Name}";
+            try
             {
-                ok++;
-                appliedIds.Add(item.Id);
-                item.IsSelected = false;
+                item.State = await OptimizationCatalog.ApplyAsync(item);
+                if (item.State == ApplyState.Applied)
+                {
+                    OptimizationStateStore.MarkMany([item.Id]);
+                    ok++;
+                    item.IsSelected = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                item.State = ApplyState.Failed;
+                item.StatusMessage = ex.Message;
             }
         }
 
-        if (appliedIds.Count > 0)
-            OptimizationStateStore.MarkMany(appliedIds);
-
-        _main.SetBusy(false, $"{ok}/{selected.Count} otimizações de jogo aplicadas");
-    }
+        _main.StatusMessage = $"{ok}/{selected.Count} otimizações de jogo aplicadas · {selected.Count - ok} falhas";
+    });
 
     [RelayCommand]
     private void ToggleSelectAll()
@@ -257,93 +243,124 @@ public partial class CleanupViewModel : ObservableObject
     public CleanupViewModel(MainViewModel main) => _main = main;
 
     [RelayCommand]
-    private async Task ScanAsync()
+    private Task ScanAsync() => _main.RunOperationAsync("Analisando arquivos temporários…", async () =>
     {
-        _cts?.Cancel();
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
-
-        _main.SetBusy(true, "Analisando arquivos temporários…");
-        ScanStatus = "Varrendo pastas (pode levar alguns segundos)…";
-        Targets.Clear();
-        RecalcTotal();
-
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
+        CancelCommand.NotifyCanExecuteChanged();
+        _main.SetCancellation(() => RequestCancel(cts));
         try
         {
-            var progress = new Progress<string>(s => ScanStatus = s);
-            var found = await CleanupService.ScanAsync(progress, ct);
-
-            foreach (var t in found)
-            {
-                t.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName == nameof(CleanupTarget.Selected))
-                        RecalcTotal();
-                };
-                Targets.Add(t);
-            }
-            RecalcTotal();
-            ScanStatus = $"Pronto · {Targets.Count} alvos";
-            _main.SetBusy(false, $"Encontrados {Targets.Count} alvos — {TotalSizeDisplay}");
+            await ScanTargetsAsync(cts.Token);
+            _main.StatusMessage = $"Encontrados {Targets.Count} alvos — {TotalSizeDisplay}";
         }
         catch (OperationCanceledException)
         {
             ScanStatus = "Análise cancelada.";
-            _main.SetBusy(false, "Análise cancelada");
+            throw;
         }
-        catch (Exception ex)
+        catch
         {
             ScanStatus = "Falha na análise.";
-            _main.SetBusy(false, $"Erro na análise: {ex.Message}");
+            throw;
         }
+        finally
+        {
+            _cts = null;
+            CancelCommand.NotifyCanExecuteChanged();
+        }
+    });
+
+    private async Task ScanTargetsAsync(CancellationToken ct)
+    {
+        ScanStatus = "Varrendo pastas (pode levar alguns segundos)…";
+        Targets.Clear();
+        RecalcTotal();
+        var progress = new Progress<string>(s => { if (!ct.IsCancellationRequested && _main.IsBusy) ScanStatus = s; });
+        var found = await CleanupService.ScanAsync(progress, ct);
+        ct.ThrowIfCancellationRequested();
+        foreach (var t in found)
+        {
+            t.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(CleanupTarget.Selected)) RecalcTotal();
+            };
+            Targets.Add(t);
+        }
+        RecalcTotal();
+        ScanStatus = $"Pronto · {Targets.Count} alvos";
     }
 
     [RelayCommand]
-    private async Task CleanAsync()
+    private Task CleanAsync() => _main.RunOperationAsync("Limpando…", async () =>
     {
         var selected = Targets.Where(t => t.Selected).ToList();
         if (selected.Count == 0)
         {
-            _main.SetBusy(false, "Nada selecionado para limpar");
+            _main.StatusMessage = "Nada selecionado para limpar";
             return;
         }
 
-        _cts?.Cancel();
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
+        CancelCommand.NotifyCanExecuteChanged();
+        _main.SetCancellation(() => RequestCancel(cts));
+        var ct = cts.Token;
 
-        _main.SetBusy(true, "Limpando…");
         ScanStatus = "Removendo arquivos…";
 
         try
         {
             var progress = new Progress<string>(s =>
             {
+                if (ct.IsCancellationRequested || !_main.IsBusy) return;
                 ScanStatus = s;
-                _main.SetBusy(true, s);
+                _main.StatusMessage = s;
             });
             var result = await CleanupService.CleanAsync(selected, progress, ct);
             LastResult = $"Liberado {CleanupService.FormatBytes(result.BytesFreed)} · {result.FilesRemoved} arquivos · {result.Errors} erros";
             ScanStatus = LastResult;
-            _main.SetBusy(false, LastResult);
-            // Reanalisar é útil, mas não bloqueia se demorar
-            await ScanCommand.ExecuteAsync(null);
+            ct.ThrowIfCancellationRequested();
+            await ScanTargetsAsync(ct);
+            _main.StatusMessage = LastResult;
         }
         catch (OperationCanceledException)
         {
-            _main.SetBusy(false, "Limpeza cancelada");
+            ScanStatus = "Limpeza cancelada.";
+            throw;
         }
-        catch (Exception ex)
+        catch
         {
-            _main.SetBusy(false, $"Erro na limpeza: {ex.Message}");
+            ScanStatus = "Falha na limpeza.";
+            throw;
         }
+        finally
+        {
+            _cts = null;
+            CancelCommand.NotifyCanExecuteChanged();
+        }
+    });
+
+    private bool CanCancel() => _cts is not null;
+
+    private void RequestCancel(CancellationTokenSource cts)
+    {
+        if (ReferenceEquals(_cts, cts))
+        {
+            _cts = null;
+            CancelCommand.NotifyCanExecuteChanged();
+        }
+        cts.Cancel();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanCancel))]
     private void Cancel()
     {
-        _cts?.Cancel();
-        _main.SetBusy(false, "Cancelado");
+        var cts = _cts;
+        if (cts is null) return;
+        RequestCancel(cts);
+        _main.SetCancellation(null);
+        _main.StatusMessage = "Cancelando; aguardando a operação encerrar…";
     }
 
     [RelayCommand]
@@ -383,39 +400,47 @@ public partial class DebloatViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task LoadAsync()
+    private Task LoadAsync() => _main.RunOperationAsync("Listando serviços…", async () =>
     {
-        _main.SetBusy(true, "Listando serviços…");
+        await ReloadServicesAsync();
+        _main.StatusMessage = $"{Services.Count} serviços candidatos listados";
+    });
+
+    private async Task ReloadServicesAsync()
+    {
         var list = await Task.Run(GetKnownServices);
         Services.Clear();
         foreach (var s in list) Services.Add(s);
-        _main.SetBusy(false, $"{Services.Count} serviços candidatos listados");
     }
 
     [RelayCommand]
-    private async Task DisableSelectedAsync()
+    private Task DisableSelectedAsync() => _main.RunOperationAsync("Desativando serviços…", async () =>
     {
         var selected = Services.Where(s => s.IsSelected && s.CanDisable).ToList();
         if (selected.Count == 0)
         {
-            _main.SetBusy(false, "Nenhum serviço selecionado");
+            _main.StatusMessage = "Nenhum serviço selecionado";
             return;
         }
 
-        _main.SetBusy(true, "Desativando serviços…");
-        try { await RestorePointService.CreateAsync("Project Boost X - Serviços"); } catch { }
+        await _main.RequireRestorePointAsync("Project Boost X - Serviços");
 
         int ok = 0;
+        var failures = new List<string>();
         foreach (var s in selected)
         {
-            _main.SetBusy(true, $"Desativando {s.Name}");
-            await ProcessRunner.RunAsync("sc", $"config {s.Name} start= disabled");
-            await ProcessRunner.RunAsync("sc", $"stop {s.Name}");
-            ok++;
+            _main.StatusMessage = $"Desativando {s.Name}";
+            try
+            {
+                await SystemSettingsBackupService.DisableServiceAsync(s.Name);
+                s.IsSelected = false;
+                ok++;
+            }
+            catch (Exception ex) { failures.Add($"{s.Name}: {ex.Message}"); }
         }
-        _main.SetBusy(false, $"{ok} serviços desativados (reinicie para efeito total)");
-        await LoadCommand.ExecuteAsync(null);
-    }
+        await ReloadServicesAsync();
+        _main.StatusMessage = $"{ok}/{selected.Count} serviços desativados · {failures.Count} falhas. {string.Join("; ", failures)}".Trim();
+    });
 
     private static List<WindowsServiceItem> GetKnownServices()
     {
@@ -487,34 +512,34 @@ public partial class StartupViewModel : ObservableObject
     public StartupViewModel(MainViewModel main) => _main = main;
 
     [RelayCommand]
-    private async Task LoadAsync()
+    private Task LoadAsync() => _main.RunOperationAsync("Carregando itens de inicialização…", async () =>
     {
-        _main.SetBusy(true, "Carregando itens de inicialização…");
         var list = await StartupService.GetItemsAsync();
         Items.Clear();
         foreach (var i in list) Items.Add(i);
-        _main.SetBusy(false, $"{Items.Count} itens de inicialização");
-    }
+        _main.StatusMessage = $"{Items.Count} itens de inicialização";
+    });
 
     [RelayCommand]
-    private async Task DisableAsync(StartupItem? item)
+    private Task DisableAsync(StartupItem? item) => _main.RunOperationAsync("Desativando inicialização…", async () =>
     {
         if (item is null) return;
-        _main.SetBusy(true, $"Desativando {item.Name}…");
+        await _main.RequireRestorePointAsync("Project Boost X - Inicialização");
+        _main.StatusMessage = $"Desativando {item.Name}…";
         await StartupService.DisableAsync(item);
         item.IsEnabled = false;
-        _main.SetBusy(false, $"{item.Name} desativado (backup salvo)");
-    }
+        _main.StatusMessage = $"{item.Name} desativado (backup salvo)";
+    });
 
     [RelayCommand]
-    private async Task EnableAsync(StartupItem? item)
+    private Task EnableAsync(StartupItem? item) => _main.RunOperationAsync("Reativando inicialização…", async () =>
     {
         if (item is null) return;
-        _main.SetBusy(true, $"Reativando {item.Name}…");
+        _main.StatusMessage = $"Reativando {item.Name}…";
         await StartupService.EnableAsync(item);
         item.IsEnabled = true;
-        _main.SetBusy(false, $"{item.Name} reativado");
-    }
+        _main.StatusMessage = $"{item.Name} reativado";
+    });
 }
 
 public partial class MonitorViewModel : ObservableObject, IDisposable
@@ -610,9 +635,8 @@ public partial class GameProfilesViewModel : ObservableObject
     public GameProfilesViewModel(MainViewModel main) => _main = main;
 
     [RelayCommand]
-    private async Task DetectAsync()
+    private Task DetectAsync() => _main.RunOperationAsync("Procurando jogos (Steam ACF, Epic manifests, registro, discos)…", async () =>
     {
-        _main.SetBusy(true, "Procurando jogos (Steam ACF, Epic manifests, registro, discos)…");
         Games.Clear();
         SelectedGame = null;
         var list = await Task.Run(() => GameProfileService.DetectGames());
@@ -626,7 +650,7 @@ public partial class GameProfilesViewModel : ObservableObject
         foreach (var g in list)
         {
             i++;
-            _main.SetBusy(true, $"Capas {i}/{list.Count}: {g.Name}…");
+            _main.StatusMessage = $"Capas {i}/{list.Count}: {g.Name}…";
             try
             {
                 var path = await CoverService.ResolveCoverPathAsync(g);
@@ -647,8 +671,8 @@ public partial class GameProfilesViewModel : ObservableObject
         LastResult = list.Count == 0
             ? "Nenhum jogo encontrado. Tente rodar como admin ou ter jogos em pastas padrão."
             : $"{list.Count} jogos · {ok} capas reais · clique numa capa para ver as otimizações";
-        _main.SetBusy(false, LastResult);
-    }
+        _main.StatusMessage = LastResult;
+    });
 
     [RelayCommand]
     private void OpenGame(GameProfile? game)
@@ -661,100 +685,89 @@ public partial class GameProfilesViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ApplyRecommendedForSelectedAsync()
+    private Task ApplyRecommendedForSelectedAsync() => _main.RunOperationAsync("Aplicando perfil recomendado…", async () =>
     {
         var g = SelectedGame;
         if (g is null)
         {
-            _main.SetBusy(false, "Selecione um jogo na galeria");
+            _main.StatusMessage = "Selecione um jogo na galeria";
             return;
         }
 
-        _main.SetBusy(true, $"Aplicando recomendado: {g.Name}");
-        try { await RestorePointService.CreateAsync($"Project Boost X - {g.Name}"); } catch { }
+        await _main.RequireRestorePointAsync($"Project Boost X - {g.Name}");
+        _main.StatusMessage = $"Aplicando recomendado: {g.Name}";
         await Task.Run(() => GameProfileService.ApplyProfile(g, useRecommendation: true));
-        _main.SetBusy(false, $"{g.Name}: {g.Status}");
-    }
+        LastResult = $"{g.Name}: {g.Status}";
+        _main.StatusMessage = LastResult;
+    });
 
     [RelayCommand]
-    private async Task RevertForSelectedAsync()
+    private Task RevertForSelectedAsync() => _main.RunOperationAsync("Revertendo perfil…", async () =>
     {
         var g = SelectedGame;
         if (g is null) return;
-        _main.SetBusy(true, $"Revertendo {g.Name}…");
+        _main.StatusMessage = $"Revertendo {g.Name}…";
         await Task.Run(() => GameProfileService.RevertProfile(g));
-        _main.SetBusy(false, $"{g.Name} revertido");
-    }
+        LastResult = $"{g.Name} revertido";
+        _main.StatusMessage = LastResult;
+    });
 
     [RelayCommand]
-    private async Task ApplySelectedAsync()
+    private Task ApplySelectedAsync() => RunProfilesAsync(useRecommendation: false, revert: false);
+
+    [RelayCommand]
+    private Task ApplyRecommendedAsync() => RunProfilesAsync(useRecommendation: true, revert: false);
+
+    [RelayCommand]
+    private Task RevertSelectedAsync() => RunProfilesAsync(useRecommendation: false, revert: true);
+
+    private Task RunProfilesAsync(bool useRecommendation, bool revert) => _main.RunOperationAsync(
+        revert ? "Revertendo perfis…" : "Aplicando perfis…", async () =>
     {
         var selected = Games.Where(g => g.IsSelected).ToList();
         if (selected.Count == 0)
         {
-            _main.SetBusy(false, "Nenhum jogo selecionado");
+            _main.StatusMessage = "Nenhum jogo selecionado";
             return;
         }
 
-        _main.SetBusy(true, "Aplicando perfis…");
-        try { await RestorePointService.CreateAsync("Project Boost X - Perfis de jogo"); } catch { }
+        if (!revert) await _main.RequireRestorePointAsync("Project Boost X - Perfis de jogo");
 
+        var ok = 0;
+        var failures = new List<string>();
         foreach (var g in selected)
         {
-            g.IsFullscreenOptDisabled = SelectAllFso;
-            g.IsHighDpiOverridden = SelectAllDpi;
-            g.IsHighPriority = SelectAllPriority;
-            g.IsGpuPreferred = SelectAllGpu;
-            _main.SetBusy(true, $"Perfil: {g.Name}");
-            await Task.Run(() => GameProfileService.ApplyProfile(g, useRecommendation: false));
+            _main.StatusMessage = $"{(revert ? "Revertendo" : "Aplicando")}: {g.Name}";
+            try
+            {
+                if (revert) await Task.Run(() => GameProfileService.RevertProfile(g));
+                else
+                {
+                    if (!useRecommendation)
+                    {
+                        g.IsFullscreenOptDisabled = SelectAllFso;
+                        g.IsHighDpiOverridden = SelectAllDpi;
+                        g.IsHighPriority = SelectAllPriority;
+                        g.IsGpuPreferred = SelectAllGpu;
+                    }
+                    await Task.Run(() => GameProfileService.ApplyProfile(g, useRecommendation));
+                }
+                ok++;
+            }
+            catch (Exception ex) { failures.Add($"{g.Name}: {ex.Message}"); }
         }
 
-        LastResult = $"{selected.Count} perfis aplicados (FSO clássico, DPI, prioridade, GPU).";
-        _main.SetBusy(false, LastResult);
-    }
+        LastResult = $"{ok}/{selected.Count} perfis {(revert ? "revertidos" : "aplicados")} · {failures.Count} falhas. {string.Join("; ", failures)}".Trim();
+        _main.StatusMessage = LastResult;
+    });
 
     [RelayCommand]
-    private async Task ApplyRecommendedAsync()
+    private Task BoostRunningAsync() => _main.RunOperationAsync("Aumentando prioridade de jogos em execução…", async () =>
     {
-        var selected = Games.Where(g => g.IsSelected).ToList();
-        if (selected.Count == 0)
-        {
-            _main.SetBusy(false, "Nenhum jogo selecionado");
-            return;
-        }
-
-        _main.SetBusy(true, "Aplicando recomendações por jogo…");
-        try { await RestorePointService.CreateAsync("Project Boost X - Recomendado por jogo"); } catch { }
-
-        foreach (var g in selected)
-        {
-            _main.SetBusy(true, $"Recomendado: {g.Name}");
-            await Task.Run(() => GameProfileService.ApplyProfile(g, useRecommendation: true));
-        }
-
-        LastResult = $"{selected.Count} jogos com perfil recomendado aplicado. Confira as dicas na lista.";
-        _main.SetBusy(false, LastResult);
-    }
-
-    [RelayCommand]
-    private async Task RevertSelectedAsync()
-    {
-        var selected = Games.Where(g => g.IsSelected).ToList();
-        _main.SetBusy(true, "Revertendo perfis…");
-        foreach (var g in selected)
-            await Task.Run(() => GameProfileService.RevertProfile(g));
-        LastResult = $"{selected.Count} perfis revertidos.";
-        _main.SetBusy(false, LastResult);
-    }
-
-    [RelayCommand]
-    private void BoostRunning()
-    {
-        _main.SetBusy(true, "Aumentando prioridade de jogos em execução…");
-        var msg = GameProfileService.BoostRunningGames();
+        var msg = await Task.Run(GameProfileService.BoostRunningGames);
         LastResult = msg;
-        _main.SetBusy(false, msg);
-    }
+        _main.StatusMessage = msg;
+    });
 
     [RelayCommand]
     private void SelectAll()

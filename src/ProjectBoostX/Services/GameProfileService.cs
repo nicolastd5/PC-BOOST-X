@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using BoostParaPc.Models;
@@ -282,7 +284,7 @@ public static class GameProfileService
     {
         var roots = new List<string>();
 
-        void AddSteam(string steamPath)
+        void AddSteam(string? steamPath)
         {
             if (string.IsNullOrEmpty(steamPath)) return;
             roots.Add(steamPath);
@@ -681,96 +683,184 @@ public static class GameProfileService
 
     public static void ApplyProfile(GameProfile game, bool useRecommendation = true)
     {
-        var exe = game.ExecutablePath;
-        if (!File.Exists(exe)) return;
-
-        var rec = useRecommendation ? GetRecommendation(game.RecommendationKey) : null;
-        var fso = game.IsFullscreenOptDisabled || (rec?.Fso ?? false);
-        var dpi = game.IsHighDpiOverridden || (rec?.Dpi ?? false);
-        var highPrio = game.IsHighPriority || (rec?.HighPriority ?? false);
-        var gpu = game.IsGpuPreferred || (rec?.Gpu ?? false);
-
-        using (var key = Registry.CurrentUser.CreateSubKey(
-                   @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers", writable: true))
-        {
-            var flags = new List<string>();
-            if (fso)
-            {
-                flags.Add("~ DISABLEDXMAXIMIZEDWINDOWEDMODE");
-                flags.Add("~ DISABLEFULLSCREENOPTIMIZATIONS");
-            }
-            if (dpi)
-                flags.Add("~ HIGHDPIAWARE");
-
-            if (flags.Count > 0)
-                key.SetValue(exe, string.Join(" ", flags), RegistryValueKind.String);
-            else
-                key.DeleteValue(exe, throwOnMissingValue: false);
-        }
-
-        if (gpu)
+        lock (ProfileLock)
         {
             try
             {
-                var gpKey = Registry.CurrentUser.CreateSubKey(
-                    @"Software\Microsoft\DirectX\UserGpuPreferences", writable: true);
-                gpKey?.SetValue(exe, "GpuPreference=2;", RegistryValueKind.String);
-            }
-            catch { }
-        }
+                var exe = Path.GetFullPath(game.ExecutablePath);
+                if (!File.Exists(exe))
+                    throw new FileNotFoundException("O executável do jogo não foi encontrado.", exe);
 
-        if (highPrio)
-        {
-            try
+                var rec = useRecommendation ? GetRecommendation(game.RecommendationKey) : null;
+                var fso = rec?.Fso ?? game.IsFullscreenOptDisabled;
+                var dpi = rec?.Dpi ?? game.IsHighDpiOverridden;
+                var highPrio = rec?.HighPriority ?? game.IsHighPriority;
+                var gpu = rec?.Gpu ?? game.IsGpuPreferred;
+                var changes = new List<ProfileRegistryChange>();
+
+                var layers = ReadProfileValue(Registry.CurrentUser, LayersPath, exe);
+                AddProfileChange(changes, Registry.CurrentUser, LayersPath, exe, layers,
+                    MergeLayers(AsProfileString(layers), fso, dpi), RegistryValueKind.String);
+
+                var preferences = ReadProfileValue(Registry.CurrentUser, GpuPath, exe);
+                AddProfileChange(changes, Registry.CurrentUser, GpuPath, exe, preferences,
+                    MergeGpuPreferences(AsProfileString(preferences), gpu), RegistryValueKind.String);
+
+                var priorityPath = GetPriorityPath(exe);
+                var priority = ReadProfileValue(Registry.LocalMachine, priorityPath, "CpuPriorityClass");
+                // Other priority classes belong to the user's existing configuration.
+                if (highPrio || priority is int and 3)
+                    AddProfileChange(changes, Registry.LocalMachine, priorityPath, "CpuPriorityClass", priority,
+                        highPrio ? 3 : null, RegistryValueKind.DWord);
+
+                if (changes.Count > 0)
+                {
+                    // Capture every affected value before any registry write, including deletion.
+                    var backup = RegistryBackupService.CreateBackup(GetProfileBackupId(exe),
+                        changes.Select(c => (c.Root, c.KeyPath, c.ValueName)));
+                    try
+                    {
+                        foreach (var change in changes)
+                            WriteProfileChange(change);
+                    }
+                    catch (Exception applyError)
+                    {
+                        try { RegistryBackupService.RestoreAndArchive(backup); }
+                        catch (Exception restoreError)
+                        {
+                            throw new AggregateException(
+                                "Falha ao aplicar o perfil e ao restaurar parte dos valores. O backup foi preservado para nova tentativa.",
+                                applyError, restoreError);
+                        }
+                        throw new InvalidOperationException("Falha ao aplicar o perfil. Os valores anteriores foram restaurados.", applyError);
+                    }
+                }
+
+                game.IsFullscreenOptDisabled = fso;
+                game.IsHighDpiOverridden = dpi;
+                game.IsHighPriority = highPrio;
+                game.IsGpuPreferred = gpu;
+                game.Status = useRecommendation ? $"Recomendado ({rec?.Title})" : "Perfil aplicado";
+            }
+            catch (Exception error)
             {
-                using var ifeo = Registry.LocalMachine.CreateSubKey(
-                    $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{game.FileName}",
-                    writable: true);
-                ifeo?.SetValue("CpuPriorityClass", 3, RegistryValueKind.DWord);
+                game.Status = $"Falha ao aplicar: {error.Message}";
+                throw;
             }
-            catch { }
         }
-
-        game.IsFullscreenOptDisabled = fso;
-        game.IsHighDpiOverridden = dpi;
-        game.IsHighPriority = highPrio;
-        game.IsGpuPreferred = gpu;
-        game.Status = useRecommendation ? $"Recomendado ({rec?.Title})" : "Perfil aplicado";
     }
 
     public static void RevertProfile(GameProfile game)
     {
-        var exe = game.ExecutablePath;
-        try
+        lock (ProfileLock)
         {
-            using var key = Registry.CurrentUser.OpenSubKey(
-                @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers", writable: true);
-            key?.DeleteValue(exe, throwOnMissingValue: false);
-        }
-        catch { }
+            try
+            {
+                var exe = Path.GetFullPath(game.ExecutablePath);
+                if (RegistryBackupService.RestoreMatchingBackups(GetProfileBackupId(exe)) == 0)
+                    throw new InvalidOperationException("Nenhum backup deste jogo foi encontrado; nenhum valor foi removido.");
 
-        try
+                var layers = AsProfileString(ReadProfileValue(Registry.CurrentUser, LayersPath, exe)) ?? "";
+                var tokens = layers.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                game.IsFullscreenOptDisabled = tokens.Any(t => FullscreenFlags.Contains(t, StringComparer.OrdinalIgnoreCase));
+                game.IsHighDpiOverridden = tokens.Contains("HIGHDPIAWARE", StringComparer.OrdinalIgnoreCase);
+                game.IsGpuPreferred = (AsProfileString(ReadProfileValue(Registry.CurrentUser, GpuPath, exe)) ?? "")
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries).Any(IsHighPerformanceGpuPreference);
+                game.IsHighPriority = ReadProfileValue(Registry.LocalMachine, GetPriorityPath(exe), "CpuPriorityClass") is int and 3;
+                game.Status = "Valores anteriores restaurados";
+            }
+            catch (Exception error)
+            {
+                game.Status = $"Falha ao reverter: {error.Message}";
+                throw;
+            }
+        }
+    }
+
+    private static readonly object ProfileLock = new();
+    private const string LayersPath = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
+    private const string GpuPath = @"Software\Microsoft\DirectX\UserGpuPreferences";
+    private static readonly string[] FullscreenFlags = ["DISABLEDXMAXIMIZEDWINDOWEDMODE", "DISABLEFULLSCREENOPTIMIZATIONS"];
+
+    private sealed record ProfileRegistryChange(RegistryKey Root, string KeyPath, string ValueName, object? Value, RegistryValueKind Kind);
+
+    private static string GetProfileBackupId(string exe)
+        => "game_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(exe).ToUpperInvariant())));
+
+    private static string GetPriorityPath(string exe)
+        => $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{Path.GetFileName(exe)}\PerfOptions";
+
+    private static object? ReadProfileValue(RegistryKey root, string path, string name)
+    {
+        using var key = root.OpenSubKey(path, writable: false);
+        return key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+    }
+
+    private static string? AsProfileString(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        _ => throw new InvalidDataException("Uma preferência do jogo tem um tipo inesperado no Registro.")
+    };
+
+    private static void AddProfileChange(List<ProfileRegistryChange> changes, RegistryKey root, string path,
+        string name, object? current, object? value, RegistryValueKind kind)
+    {
+        if (!Equals(current, value))
+            changes.Add(new ProfileRegistryChange(root, path, name, value, kind));
+    }
+
+    private static void WriteProfileChange(ProfileRegistryChange change)
+    {
+        if (change.Value is null)
         {
-            using var gp = Registry.CurrentUser.OpenSubKey(
-                @"Software\Microsoft\DirectX\UserGpuPreferences", writable: true);
-            gp?.DeleteValue(exe, throwOnMissingValue: false);
+            using var key = change.Root.OpenSubKey(change.KeyPath, writable: true);
+            key?.DeleteValue(change.ValueName, throwOnMissingValue: false);
+            return;
         }
-        catch { }
+        using var writable = change.Root.CreateSubKey(change.KeyPath, writable: true)
+            ?? throw new IOException($"Não foi possível abrir {change.Root.Name}\\{change.KeyPath} para gravação.");
+        writable.SetValue(change.ValueName, change.Value, change.Kind);
+    }
 
-        try
+    private static string? MergeLayers(string? existing, bool fso, bool dpi)
+    {
+        var tokens = (existing ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).ToList();
+        foreach (var flag in FullscreenFlags.Append("HIGHDPIAWARE"))
         {
-            using var ifeo = Registry.LocalMachine.OpenSubKey(
-                $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{game.FileName}",
-                writable: true);
-            ifeo?.DeleteValue("CpuPriorityClass", throwOnMissingValue: false);
+            var enabled = flag == "HIGHDPIAWARE" ? dpi : fso;
+            if (!enabled)
+                tokens.RemoveAll(t => t.Equals(flag, StringComparison.OrdinalIgnoreCase));
+            else if (!tokens.Contains(flag, StringComparer.OrdinalIgnoreCase))
+                tokens.Add(flag);
         }
-        catch { }
+        if (!tokens.Any(t => t is not "~" and not "!")) return null;
+        if (!tokens.Contains("~")) tokens.Insert(0, "~");
+        return string.Join(" ", tokens.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
 
-        game.IsFullscreenOptDisabled = false;
-        game.IsHighDpiOverridden = false;
-        game.IsHighPriority = false;
-        game.IsGpuPreferred = false;
-        game.Status = "Revertido";
+    private static bool IsGpuPreference(string field)
+        => field.Split('=', 2)[0].Trim().Equals("GpuPreference", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsHighPerformanceGpuPreference(string field)
+        => IsGpuPreference(field) && field.Split('=', 2) is [_, var value] && value.Trim() == "2";
+
+    private static string? MergeGpuPreferences(string? existing, bool enabled)
+    {
+        var fields = new List<string>();
+        var added = false;
+        foreach (var field in (existing ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (enabled && IsGpuPreference(field))
+            {
+                if (!added) fields.Add("GpuPreference=2");
+                added = true;
+            }
+            else if (enabled || !IsHighPerformanceGpuPreference(field))
+                fields.Add(field);
+        }
+        if (enabled && !added) fields.Add("GpuPreference=2");
+        return fields.Count == 0 ? null : string.Join(';', fields) + ";";
     }
 
     public static string BoostRunningGames()

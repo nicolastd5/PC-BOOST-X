@@ -10,55 +10,33 @@ public static class PowerPlanService
 
     public static async Task<bool> ActivateHighPerformanceAsync()
     {
-        // Tenta Alto Desempenho; se não existir, tenta Desempenho Máximo
-        var r1 = await ProcessRunner.RunAsync("powercfg", $"/setactive {HighPerformance}");
-        if (r1.Success) return true;
-
-        var r2 = await ProcessRunner.RunAsync("powercfg", $"/setactive {UltimatePerformance}");
-        if (r2.Success) return true;
-
-        // Cria um plano custom baseado no Equilibrado
-        var duplicate = await ProcessRunner.RunAsync("powercfg", $"/duplicatescheme {Balanced}");
-        if (duplicate.Success)
+        try
         {
-            // Extrai GUID do output
-            var guid = ExtractGuid(duplicate.StdOut);
-            if (guid is not null)
-            {
-                await ProcessRunner.RunAsync("powercfg", $"/setactive {guid}");
-                return true;
-            }
+            var list = await ProcessRunner.RunCheckedAsync("powercfg.exe", "/list", 8_000).ConfigureAwait(false);
+            var target = list.StdOut.Contains(HighPerformance, StringComparison.OrdinalIgnoreCase) ? HighPerformance
+                : list.StdOut.Contains(UltimatePerformance, StringComparison.OrdinalIgnoreCase) ? UltimatePerformance : null;
+            await SystemSettingsBackupService.ActivatePowerPlanAsync(target ?? UltimatePerformance, duplicate: target is null).ConfigureAwait(false);
+            return true;
         }
-        return false;
+        catch { return false; }
     }
 
     public static async Task<bool> ActivateBalancedAsync()
     {
-        var result = await ProcessRunner.RunAsync("powercfg", $"/setactive {Balanced}");
-        return result.Success;
+        try { await SystemSettingsBackupService.ActivatePowerPlanAsync(Balanced).ConfigureAwait(false); return true; }
+        catch { return false; }
     }
 
     public static async Task DisableSleepTimeoutsAsync()
     {
-        // AC (tomada): não dormir
-        await ProcessRunner.RunAsync("powercfg", "/change standby-timeout-ac 0");
-        await ProcessRunner.RunAsync("powercfg", "/change hibernate-timeout-ac 0");
-        await ProcessRunner.RunAsync("powercfg", "/change monitor-timeout-ac 0");
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "standbyidle", 0).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_sleep", "hibernateidle", 0).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_video", "videoidle", 0).ConfigureAwait(false);
     }
 
     public static async Task SetGpuPreferenceAsync()
     {
-        // Preferência de GPU de alto desempenho no plano ativo
-        // SUB_VIDEO 7516b95f-f776-4464-8c53-06167f40cc99
-        // PROCTHROTTLEMAX 75b0ae3f-dce0-47c1-8f8a-a1b8a1b0e0e1 — skip, use powercfg overlays
-        await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current sub_processor PROCTHROTTLEMAX 100");
-        await ProcessRunner.RunAsync("powercfg", "/setdcvalueindex scheme_current sub_processor PROCTHROTTLEMAX 100");
-        await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
-    }
-
-    private static string? ExtractGuid(string text)
-    {
-        var match = System.Text.RegularExpressions.Regex.Match(text, @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-        return match.Success ? match.Value : null;
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "PROCTHROTTLEMAX", 100).ConfigureAwait(false);
+        await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "PROCTHROTTLEMAX", 100, ac: false).ConfigureAwait(false);
     }
 }

@@ -1,24 +1,43 @@
-using System.Diagnostics;
+using System.Text;
 
 namespace BoostParaPc.Services;
 
 public static class RestorePointService
 {
-    public static async Task<bool> CreateAsync(string description = "Project Boost X - antes de otimizar")
-    {
-        // Ativa System Restore na unidade C: se necessário e cria ponto
-        var script = """
-            $ErrorActionPreference = 'SilentlyContinue'
-            Enable-ComputerRestore -Drive "C:\" | Out-Null
-            Checkpoint-Computer -Description "ARGS_DESC" -RestorePointType "MODIFY_SETTINGS"
-            "OK"
-            """;
-        script = script.Replace("ARGS_DESC", description.Replace("\"", "'"));
+    private const string SuccessToken = "PROJECT_BOOST_X_RESTORE_CREATED";
 
-        var result = await ProcessRunner.RunPowerShellAsync(script, timeoutMs: 60_000);
-        return result.Contains("OK", StringComparison.OrdinalIgnoreCase)
-               || result.Contains("sucesso", StringComparison.OrdinalIgnoreCase)
-               || string.IsNullOrWhiteSpace(result);
+    public static Task<bool> CreateAsync(string description = "Project Boost X - antes de otimizar")
+        => CreateAsync(description, (script, timeout) => ProcessRunner.RunPowerShellAsync(script, timeout));
+
+    internal static async Task<bool> CreateAsync(string description, Func<string, int, Task<string>> execute)
+    {
+        try
+        {
+            var result = await execute(BuildCreateScript(description), 60_000).ConfigureAwait(false);
+            return string.Equals(result.Trim(), SuccessToken, StringComparison.Ordinal);
+        }
+        catch { return false; }
+    }
+
+    internal static string BuildCreateScript(string description)
+    {
+        // A descrição pode vir do nome de um executável. Codificar em Base64 evita
+        // que aspas, acentos, quebras de linha ou metacaracteres sejam interpretados
+        // pelo PowerShell como parte do script.
+        var encodedDescription = Convert.ToBase64String(Encoding.UTF8.GetBytes(description ?? string.Empty));
+        return $$"""
+        $ErrorActionPreference = 'Stop'
+        $description = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{encodedDescription}}'))
+        $drive = $env:SystemDrive.TrimEnd('\') + '\'
+        Enable-ComputerRestore -Drive $drive | Out-Null
+        $before = @(Get-ComputerRestorePoint | Select-Object -ExpandProperty SequenceNumber)
+        Checkpoint-Computer -Description $description -RestorePointType 'MODIFY_SETTINGS' | Out-Null
+        $created = @(Get-ComputerRestorePoint | Where-Object {
+            $_.SequenceNumber -notin $before -and $_.Description -ceq $description
+        })
+        if ($created.Count -eq 0) { throw 'Não foi possível verificar um novo ponto de restauração.' }
+        '{{SuccessToken}}'
+        """;
     }
 
     public static async Task<IReadOnlyList<string>> ListAsync()

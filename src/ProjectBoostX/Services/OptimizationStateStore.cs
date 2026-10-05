@@ -34,15 +34,19 @@ public static class OptimizationStateStore
     {
         lock (Lock)
         {
-            try
+            var dir = Path.GetDirectoryName(FilePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var temporary = FilePath + ".tmp";
+            var json = JsonSerializer.Serialize(ids.Distinct().OrderBy(x => x).ToList(),
+                new JsonSerializerOptions { WriteIndented = true });
+            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                var dir = Path.GetDirectoryName(FilePath);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                File.WriteAllText(FilePath,
-                    JsonSerializer.Serialize(ids.Distinct().OrderBy(x => x).ToList(),
-                        new JsonSerializerOptions { WriteIndented = true }));
+                using var writer = new StreamWriter(stream);
+                writer.Write(json);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
             }
-            catch { }
+            File.Move(temporary, FilePath, overwrite: true);
         }
     }
 

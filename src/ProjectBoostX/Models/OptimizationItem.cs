@@ -21,7 +21,7 @@ public partial class OptimizationItem : ObservableObject
     [ObservableProperty]
     private string? _statusMessage;
 
-    public bool IsReversible => true;
+    public bool IsReversible => Id is not ("net.dns.flush" or "memory.standby" or "sys.flushdns");
 
     public string RiskDisplay => Risk switch
     {

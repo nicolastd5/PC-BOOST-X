@@ -12,6 +12,7 @@
 
             <local:PageToVisibilityConverter x:Key="PageToVis" />
             <local:BoolToVisibilityConverter x:Key="BoolToVis" />
+            <local:BoolToVisibilityConverter x:Key="NotBoolToVis" Invert="True" />
             <conv:PathToImageSourceConverter x:Key="PathToImage" />
         </ResourceDictionary>
     </Application.Resources>

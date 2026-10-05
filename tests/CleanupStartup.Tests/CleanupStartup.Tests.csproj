@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/ProjectBoostX/Services/CleanupService.cs" Link="Production/CleanupService.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/StartupService.cs" Link="Production/StartupService.cs" />
+    <Compile Include="../../src/ProjectBoostX/Models/CleanupModels.cs" Link="Production/CleanupModels.cs" />
+  </ItemGroup>
+</Project>

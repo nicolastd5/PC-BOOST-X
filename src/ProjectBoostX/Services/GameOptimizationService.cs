@@ -54,11 +54,10 @@ public static class GameOptimizationService
     {
         // SystemProfile: NetworkingCategory / Responsiveness para jogos
         RegistryBackupService.SetDword(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Affinity", 0);
-        RegistryBackupService.SetDword(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Background Only", "False".GetHashCode() == 0 ? 0 : 0);
         RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Background Only", "False");
-        RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Clock Rate", "10000");
-        RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "GPU Priority", "8");
-        RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Priority", "6");
+        RegistryBackupService.SetDword(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Clock Rate", 10000);
+        RegistryBackupService.SetDword(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "GPU Priority", 8);
+        RegistryBackupService.SetDword(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Priority", 6);
         RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "Scheduling Category", "High");
         RegistryBackupService.SetString(Registry.LocalMachine, MultimediaProfileKey + @"\Tasks\Games", "SFIO Priority", "High");
 
@@ -72,6 +71,8 @@ public static class GameOptimizationService
     public static async Task DisableGameDvrBroadcastAsync()
     {
         RegistryBackupService.SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "HistoricalCaptureEnabled", 0);
+        RegistryBackupService.SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0);
+        RegistryBackupService.SetDword(Registry.CurrentUser, GameConfigStoreKey, "GameDVR_Enabled", 0);
         await Task.CompletedTask;
     }
 

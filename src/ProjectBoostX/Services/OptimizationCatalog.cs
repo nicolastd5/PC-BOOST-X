@@ -5,7 +5,7 @@ using Microsoft.Win32;
 namespace BoostParaPc.Services;
 
 /// <summary>
-/// Catálogo de otimizações seguras e reversíveis.
+/// Catálogo de ajustes; mudanças persistentes exigem backup e ações pontuais não são reversíveis.
 /// </summary>
 public static class OptimizationCatalog
 {
@@ -116,11 +116,11 @@ public static class OptimizationCatalog
         new()
         {
             Id = "game.notifications",
-            Name = "Silenciar notificações em jogo",
-            Description = "Ativa Focus Assist automático em apps em tela cheia.",
+            Name = "Desativar notificações do Windows",
+            Description = "Desativa notificações globalmente até você reverter o ajuste.",
             Category = OptimizationCategory.Gaming,
             Risk = RiskLevel.Safe,
-            Impact = "Zero pop-up no meio da partida"
+            Impact = "Notificações desativadas"
         },
         new()
         {
@@ -464,6 +464,7 @@ public static class OptimizationCatalog
 
     public static async Task<ApplyState> ApplyAsync(OptimizationItem item)
     {
+        item.StatusMessage = null;
         try
         {
             switch (item.Id)
@@ -476,25 +477,21 @@ public static class OptimizationCatalog
                     return ApplyState.Applied;
 
                 case "power.cpu.max":
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current sub_processor PROCTHROTTLEMAX 100");
-                    await ProcessRunner.RunAsync("powercfg", "/setdcvalueindex scheme_current sub_processor PROCTHROTTLEMAX 100");
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN 100");
-                    await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
+                    await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "PROCTHROTTLEMAX", 100);
+                    await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "PROCTHROTTLEMAX", 100, ac: false);
+                    await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "PROCTHROTTLEMIN", 100);
                     return ApplyState.Applied;
 
                 case "power.usb.suspend":
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0");
-                    await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
+                    await SystemSettingsBackupService.SetPowerValueAsync("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", 0);
                     return ApplyState.Applied;
 
                 case "power.pcie.aspm":
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current 501a4d13-42af-4429-9fd1-a8218c268e20 ee12f906-d277-404b-b6da-e5fa1a576df5 0");
-                    await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
+                    await SystemSettingsBackupService.SetPowerValueAsync("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", 0);
                     return ApplyState.Applied;
 
                 case "power.wireless.max":
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0");
-                    await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
+                    await SystemSettingsBackupService.SetPowerValueAsync("19cbb8fa-5279-450e-9fac-8a3d5fedd0c1", "12bbebe6-58d6-4636-95bb-3217ef867c1a", 0);
                     return ApplyState.Applied;
 
                 case "game.mode":
@@ -524,11 +521,8 @@ public static class OptimizationCatalog
 
                 case "game.notifications":
                     BackupExtra("gamenotif",
-                        (Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default$windows.data.notifications.quiethourssettings\windows.data.notifications.quiethourssettings", "Data"),
-                        (Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings", "NOC_GLOBAL_SETTING_TOASTS_ENABLED"));
+                        (Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\PushNotifications", "ToastEnabled"));
                     RegistryBackupService.SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\PushNotifications", "ToastEnabled", 0);
-                    // Focus Assist: 0=off, 2=priority, 3=alarms — usamos 3 em tela cheia via Game Mode
-                    RegistryBackupService.SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\CloudStore", "QuietHoursEnabled", 1);
                     return ApplyState.Applied;
 
                 case "game.bartips":
@@ -549,7 +543,7 @@ public static class OptimizationCatalog
                     RegistryBackupService.SetString(Registry.CurrentUser, @"Control Panel\Mouse", "MouseSpeed", "0");
                     RegistryBackupService.SetString(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold1", "0");
                     RegistryBackupService.SetString(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold2", "0");
-                    await ProcessRunner.RunAsync("rundll32.exe", "user32.dll,UpdatePerUserSystemParameters");
+                    await ProcessRunner.RunCheckedAsync("rundll32.exe", "user32.dll,UpdatePerUserSystemParameters");
                     return ApplyState.Applied;
 
                 case "input.mousespeed":
@@ -579,7 +573,7 @@ public static class OptimizationCatalog
                     return ApplyState.Applied;
 
                 case "net.tcp":
-                    await ProcessRunner.RunAsync("netsh", "int tcp set global autotuninglevel=normal");
+                    await SystemSettingsBackupService.SetTcpAutoTuningAsync("normal");
                     return ApplyState.Applied;
 
                 case "net.nagle":
@@ -587,7 +581,7 @@ public static class OptimizationCatalog
                     return ApplyState.Applied;
 
                 case "net.dns.flush":
-                    await ProcessRunner.RunAsync("ipconfig", "/flushdns");
+                    await ProcessRunner.RunCheckedAsync("ipconfig", "/flushdns");
                     return ApplyState.Applied;
 
                 case "net.throttle.off":
@@ -633,14 +627,9 @@ public static class OptimizationCatalog
 
                 case "telemetry.off":
                     BackupTelemetry();
-                    try
-                    {
-                        RegistryBackupService.SetDword(Registry.LocalMachine,
-                            @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0);
-                    }
-                    catch { }
-                    await ProcessRunner.RunPowerShellAsync(
-                        "Get-ScheduledTask -TaskPath '\\Microsoft\\Windows\\Customer Experience Improvement Program\\' -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null");
+                    RegistryBackupService.SetDword(Registry.LocalMachine,
+                        @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0);
+                    await SystemSettingsBackupService.DisableTelemetryTasksAsync();
                     return ApplyState.Applied;
 
                 case "telemetry.tips":
@@ -701,55 +690,39 @@ public static class OptimizationCatalog
                     return ApplyState.Applied;
 
                 case "services.diagtrack":
-                    BackupService("DiagTrack");
-                    await SetServiceStartAsync("DiagTrack", "disabled");
-                    await StopServiceAsync("DiagTrack");
+                    await SystemSettingsBackupService.DisableServiceAsync("DiagTrack");
                     return ApplyState.Applied;
 
                 case "services.sysmain":
                     if (!IsSsd()) return ApplyState.Unsupported;
-                    BackupService("SysMain");
-                    await SetServiceStartAsync("SysMain", "disabled");
-                    await StopServiceAsync("SysMain");
+                    await SystemSettingsBackupService.DisableServiceAsync("SysMain");
                     return ApplyState.Applied;
 
                 case "services.search":
-                    BackupService("WSearch");
-                    await SetServiceStartAsync("WSearch", "disabled");
-                    await StopServiceAsync("WSearch");
+                    await SystemSettingsBackupService.DisableServiceAsync("WSearch");
                     return ApplyState.Applied;
 
                 case "services.fax":
-                    BackupService("Fax");
-                    await SetServiceStartAsync("Fax", "disabled");
-                    await StopServiceAsync("Fax");
+                    await SystemSettingsBackupService.DisableServiceAsync("Fax");
                     return ApplyState.Applied;
 
                 case "services.maps":
-                    BackupService("MapsBroker");
-                    await SetServiceStartAsync("MapsBroker", "disabled");
-                    await StopServiceAsync("MapsBroker");
+                    await SystemSettingsBackupService.DisableServiceAsync("MapsBroker");
                     return ApplyState.Applied;
 
                 case "services.remoteregistry":
-                    BackupService("RemoteRegistry");
-                    await SetServiceStartAsync("RemoteRegistry", "disabled");
-                    await StopServiceAsync("RemoteRegistry");
+                    await SystemSettingsBackupService.DisableServiceAsync("RemoteRegistry");
                     return ApplyState.Applied;
 
                 case "services.xbox":
                     foreach (var s in new[] { "XblAuthManager", "XblGameSave", "XboxNetApiSvc", "XboxGipSvc" })
                     {
-                        BackupService(s);
-                        await SetServiceStartAsync(s, "disabled");
-                        await StopServiceAsync(s);
+                        await SystemSettingsBackupService.DisableServiceAsync(s);
                     }
                     return ApplyState.Applied;
 
                 case "services.printer":
-                    BackupService("Spooler");
-                    await SetServiceStartAsync("Spooler", "disabled");
-                    await StopServiceAsync("Spooler");
+                    await SystemSettingsBackupService.DisableServiceAsync("Spooler");
                     return ApplyState.Applied;
 
                 case "memory.large":
@@ -772,7 +745,7 @@ public static class OptimizationCatalog
 
                 case "memory.standby":
                 case "sys.flushdns":
-                    await ProcessRunner.RunAsync("ipconfig", "/flushdns");
+                    await ProcessRunner.RunCheckedAsync("ipconfig", "/flushdns");
                     // EmptyWorkingSet em processos grandes (soft reclaim)
                     await ProcessRunner.RunPowerShellAsync("""
                         $sig = '[DllImport("psapi.dll")] public static extern int EmptyWorkingSet(IntPtr hwSnap);'
@@ -800,12 +773,11 @@ public static class OptimizationCatalog
                     return ApplyState.Applied;
 
                 case "sys.hibernation":
-                    await ProcessRunner.RunAsync("powercfg", "/hibernate off");
+                    await SystemSettingsBackupService.SetHibernationAsync(false);
                     return ApplyState.Applied;
 
                 case "sys.corepark":
-                    await ProcessRunner.RunAsync("powercfg", "/setacvalueindex scheme_current sub_processor CPMINCORES 100");
-                    await ProcessRunner.RunAsync("powercfg", "/setactive scheme_current");
+                    await SystemSettingsBackupService.SetPowerValueAsync("sub_processor", "CPMINCORES", 100);
                     return ApplyState.Applied;
 
                 case "sys.priority.sep":
@@ -829,34 +801,40 @@ public static class OptimizationCatalog
     private static async Task ApplyNagleOffAsync()
     {
         // Aplica TcpAckFrequency=1 e TcpNoDelay=1 nas interfaces
-        await Task.Run(() =>
+        var changed = await Task.Run(() =>
         {
-            try
+            using var interfaces = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", writable: false)
+                ?? throw new InvalidOperationException("As interfaces de rede não puderam ser acessadas.");
+
+            var count = 0;
+            var failures = 0;
+            foreach (var name in interfaces.GetSubKeyNames())
             {
-                using var interfaces = Registry.LocalMachine.OpenSubKey(
-                    @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", writable: false);
-                if (interfaces is null) return;
-
-                foreach (var name in interfaces.GetSubKeyNames())
+                try
                 {
-                    try
-                    {
-                        using var iface = interfaces.OpenSubKey(name, writable: true);
-                        if (iface is null) continue;
-                        if (iface.GetValue("DhcpIPAddress") is null && iface.GetValue("IPAddress") is null) continue;
+                    using var iface = interfaces.OpenSubKey(name, writable: true);
+                    if (iface is null) continue;
+                    if (iface.GetValue("DhcpIPAddress") is null && iface.GetValue("IPAddress") is null) continue;
 
-                        BackupExtra("nagle_" + name,
-                            (Registry.LocalMachine, $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{name}", "TcpAckFrequency"),
-                            (Registry.LocalMachine, $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{name}", "TcpNoDelay"));
+                    BackupExtra("nagle_" + name,
+                        (Registry.LocalMachine, $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{name}", "TcpAckFrequency"),
+                        (Registry.LocalMachine, $@"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{name}", "TcpNoDelay"));
 
-                        iface.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
-                        iface.SetValue("TcpNoDelay", 1, RegistryValueKind.DWord);
-                    }
-                    catch { }
+                    iface.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                    iface.SetValue("TcpNoDelay", 1, RegistryValueKind.DWord);
+                    count++;
                 }
+                catch (UnauthorizedAccessException) { failures++; }
+                catch (System.Security.SecurityException) { failures++; }
+                catch (IOException) { failures++; }
             }
-            catch { }
+            return (count, failures);
         });
+        if (changed.count == 0)
+            throw new InvalidOperationException("Nenhuma interface de rede ativa foi encontrada para aplicar o ajuste.");
+        if (changed.failures > 0)
+            throw new IOException($"Não foi possível alterar {changed.failures} interface(s) de rede.");
     }
 
     public static async Task<bool> RevertAsync(string backupFile)
@@ -906,21 +884,6 @@ public static class OptimizationCatalog
             (Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive"));
     }
 
-    private static void BackupService(string serviceName)
-    {
-        var result = ProcessRunner.RunAsync("sc", $"qc {serviceName}", timeoutMs: 10_000).GetAwaiter().GetResult();
-        var dir = AppPaths.BackupDir;
-        File.WriteAllText(
-            Path.Combine(dir, $"service_{serviceName}_{DateTime.Now:yyyyMMdd_HHmmss}.txt"),
-            result.StdOut);
-    }
-
-    private static async Task SetServiceStartAsync(string name, string startType)
-        => await ProcessRunner.RunAsync("sc", $"config {name} start= {startType}");
-
-    private static async Task StopServiceAsync(string name)
-        => await ProcessRunner.RunAsync("sc", $"stop {name}");
-
     private static bool IsSsd()
     {
         try
@@ -932,7 +895,9 @@ public static class OptimizationCatalog
         }
         catch
         {
-            return true;
+            // Se o tipo do disco não puder ser confirmado, não desative o
+            // SysMain por suposição: em HD ele pode ser útil.
+            return false;
         }
     }
 }

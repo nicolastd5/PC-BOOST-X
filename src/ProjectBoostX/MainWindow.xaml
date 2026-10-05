@@ -119,7 +119,7 @@
                                         <StackPanel>
                                             <TextBlock Text="Boost rápido" Style="{StaticResource SectionTitle}" />
                                             <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,12"
-                                                       Text="Otimizações seguras de alto impacto. Cria ponto de restauração antes. Tudo reversível." />
+                                                       Text="Otimizações de alto impacto com backup das configurações alteradas." />
 
                                             <ItemsControl ItemsSource="{Binding Dashboard.QuickWins}">
                                                 <ItemsControl.ItemTemplate>
@@ -134,8 +134,10 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
 
-                                            <CheckBox Content="Criar ponto de restauração antes de aplicar"
+                                            <CheckBox Content="Exigir ponto de restauração antes de aplicar (todas as abas)"
                                                       IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,12,0,10" />
+                                            <TextBlock Text="Se a criação falhar, a aplicação será interrompida. Desmarcar permite aplicar sem ponto."
+                                                       Style="{StaticResource MutedText}" Margin="0,0,0,10" TextWrapping="Wrap" />
 
                                             <StackPanel Orientation="Horizontal">
                                                 <Button Content="⚡  Aplicar Boost" Style="{StaticResource PrimaryButton}"
@@ -144,7 +146,7 @@
                                                         Command="{Binding Dashboard.CreateRestorePointCommand}" />
                                                 <Button Content="Reverter tudo" Style="{StaticResource DangerButton}" Margin="10,0,0,0"
                                                         Command="{Binding Dashboard.RevertAllCommand}"
-                                                        ToolTip="Restaura backups de registro, limpa o histórico e volta ao plano Equilibrado" />
+                                                        ToolTip="Restaura as configurações originais salvas e mantém backups que não puderem ser restaurados" />
                                             </StackPanel>
 
                                             <TextBlock Text="{Binding Dashboard.LastAction}" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
@@ -181,7 +183,10 @@
                                                 <CheckBox Content="Selecionar pendentes" IsChecked="{Binding Gaming.SelectAll}"
                                                           Command="{Binding Gaming.ToggleSelectAllCommand}" />
                                             </StackPanel>
-                                            <ItemsControl ItemsSource="{Binding Gaming.Items}" MaxHeight="520">
+                                            <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
+                                                      IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
+                                                      ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
+                                            <ItemsControl ItemsSource="{Binding Gaming.Items}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,8">
@@ -232,6 +237,9 @@
                                     <TextBlock Text="Catálogo de jogos" Style="{StaticResource TitleText}" />
                                     <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,14"
                                                Text="Clique na capa para ver as otimizações recomendadas daquele jogo." />
+                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
+                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
+                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
 
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
@@ -364,7 +372,7 @@
                                                 <Run Text="{Binding Cleanup.TotalSizeDisplay, Mode=OneWay}" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" FontSize="15" />
                                             </TextBlock>
 
-                                            <ItemsControl ItemsSource="{Binding Cleanup.Targets}" MaxHeight="380">
+                                            <ItemsControl ItemsSource="{Binding Cleanup.Targets}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" Margin="0,4">
@@ -394,6 +402,9 @@
                                     <TextBlock Text="Serviços e debloat" Style="{StaticResource TitleText}" />
                                     <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
                                                Text="Lista conservadora de telemetria e background. Leia a descrição antes de desativar." />
+                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
+                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
+                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
 
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
@@ -402,7 +413,7 @@
                                                 <Button Content="Desativar selecionados" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Command="{Binding Debloat.DisableSelectedCommand}" />
                                             </StackPanel>
 
-                                            <ItemsControl ItemsSource="{Binding Debloat.Services}" MaxHeight="440">
+                                            <ItemsControl ItemsSource="{Binding Debloat.Services}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="12" Margin="0,0,0,8">
@@ -440,6 +451,9 @@
                                     <TextBlock Text="Inicialização" Style="{StaticResource TitleText}" />
                                     <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
                                                Text="Controle o que abre com o Windows. Desativar acelera o boot e libera RAM." />
+                                    <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
+                                              IsChecked="{Binding Dashboard.RestorePointEnabled}" Margin="0,0,0,12"
+                                              ToolTip="Se falhar, a aplicação é interrompida. Desmarque para aplicar sem ponto." />
 
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
@@ -447,7 +461,7 @@
                                                     HorizontalAlignment="Left" Margin="0,0,0,12"
                                                     Command="{Binding StartupVm.LoadCommand}" />
 
-                                            <ItemsControl ItemsSource="{Binding StartupVm.Items}" MaxHeight="440">
+                                            <ItemsControl ItemsSource="{Binding StartupVm.Items}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="12" Margin="0,0,0,8">
@@ -466,10 +480,12 @@
                                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                                     <Button Content="Desativar" Style="{StaticResource SecondaryButton}"
                                                                             Command="{Binding DataContext.StartupVm.DisableCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}" Margin="0,0,6,0" />
+                                                                            CommandParameter="{Binding}" Margin="0,0,6,0"
+                                                                            Visibility="{Binding IsEnabled, Converter={StaticResource BoolToVis}}" />
                                                                     <Button Content="Reativar" Style="{StaticResource SecondaryButton}"
                                                                             Command="{Binding DataContext.StartupVm.EnableCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}" />
+                                                                            CommandParameter="{Binding}"
+                                                                            Visibility="{Binding IsEnabled, Converter={StaticResource NotBoolToVis}}" />
                                                                 </StackPanel>
                                                             </Grid>
                                                         </Border>
@@ -519,7 +535,7 @@
 
             <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="0,1,0,0" Padding="18,9">
                 <DockPanel>
-                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" />
+                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <TextBlock Style="{StaticResource MutedText}" Margin="0,0,14,0">
                             <Run Text="Admin: " />
@@ -533,7 +549,11 @@
             <Border Grid.Row="0" Grid.RowSpan="2" Background="#AA070B14" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="⚡" FontSize="36" HorizontalAlignment="Center" />
-                    <TextBlock Text="{Binding StatusMessage}" HorizontalAlignment="Center" Margin="0,10,0,0" FontSize="15" />
+                    <TextBlock Text="{Binding StatusMessage}" HorizontalAlignment="Center" Margin="24,10,24,0" FontSize="15"
+                               MaxWidth="660" TextWrapping="Wrap" TextAlignment="Center" />
+                    <Button Content="Cancelar" Style="{StaticResource DangerButton}" HorizontalAlignment="Center"
+                            Margin="0,18,0,0" Command="{Binding CancelOperationCommand}"
+                            Visibility="{Binding CanCancelOperation, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </Border>
         </Grid>

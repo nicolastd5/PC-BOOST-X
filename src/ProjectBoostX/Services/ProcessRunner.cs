@@ -14,8 +14,10 @@ public static class ProcessRunner
         string fileName,
         string arguments,
         int timeoutMs = 30_000,
-        bool elevated = false)
+        bool elevated = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var psi = new ProcessStartInfo
         {
             FileName = fileName,
@@ -38,33 +40,16 @@ public static class ProcessRunner
         }
 
         using var process = new Process { StartInfo = psi };
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-
-        if (!elevated)
-        {
-            process.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data is not null) stdout.AppendLine(e.Data);
-            };
-            process.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data is not null) stderr.AppendLine(e.Data);
-            };
-        }
-
         try
         {
             if (!process.Start())
                 return new CommandResult(-1, string.Empty, "Falha ao iniciar processo", false);
 
-            if (!elevated)
-            {
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-            }
+            var stdout = elevated ? Task.FromResult(string.Empty) : process.StandardOutput.ReadToEndAsync();
+            var stderr = elevated ? Task.FromResult(string.Empty) : process.StandardError.ReadToEndAsync();
 
-            using var cts = new CancellationTokenSource(timeoutMs);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(timeoutMs);
             try
             {
                 await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
@@ -72,24 +57,73 @@ public static class ProcessRunner
             catch (OperationCanceledException)
             {
                 try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
-                return new CommandResult(-1, stdout.ToString(), stderr.ToString(), true);
+                try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+                catch { /* Preserve the timeout even if the process cannot be stopped. */ }
+                cancellationToken.ThrowIfCancellationRequested();
+                return new CommandResult(-1,
+                    stdout.IsCompletedSuccessfully ? stdout.Result : string.Empty,
+                    stderr.IsCompletedSuccessfully ? stderr.Result : string.Empty, true);
             }
 
-            return new CommandResult(process.ExitCode, stdout.ToString(), stderr.ToString(), false);
+            return new CommandResult(process.ExitCode,
+                await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false), false);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             return new CommandResult(-1, string.Empty, ex.Message, false);
         }
     }
 
-    public static async Task<string> RunPowerShellAsync(string script, int timeoutMs = 30_000)
+    public static async Task<CommandResult> RunCheckedAsync(
+        string fileName, string arguments, int timeoutMs = 30_000, bool elevated = false,
+        CancellationToken cancellationToken = default)
     {
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-        var result = await RunAsync(
+        var result = await RunAsync(fileName, arguments, timeoutMs, elevated, cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(fileName, result);
+        return result;
+    }
+
+    private static void EnsureSuccess(string command, CommandResult result)
+    {
+        if (result.Success) return;
+        var detail = string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut.Trim() : result.StdErr.Trim();
+        if (result.TimedOut)
+            throw new TimeoutException($"{command}: tempo limite excedido. {detail}".Trim());
+        throw new InvalidOperationException($"{command}: falha (código {result.ExitCode}). {detail}".Trim());
+    }
+
+    public static Task<CommandResult> RunPowerShellResultAsync(string script, int timeoutMs = 30_000,
+        CancellationToken cancellationToken = default)
+    {
+        var checkedScript = $$"""
+            [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+            $OutputEncoding = [Console]::OutputEncoding
+            $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            $LASTEXITCODE = 0
+            try {
+                & {
+            {{script}}
+                }
+                if ($LASTEXITCODE -ne 0) { throw "Comando nativo falhou (código $LASTEXITCODE)." }
+            } catch {
+                [Console]::Error.WriteLine($_.Exception.Message)
+                exit 1
+            }
+            """;
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(checkedScript));
+        return RunAsync(
             "powershell.exe",
-            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
-            timeoutMs);
-        return result.Success ? result.StdOut.Trim() : result.StdErr.Trim();
+            $"-NoProfile -NonInteractive -OutputFormat Text -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+            timeoutMs, cancellationToken: cancellationToken);
+    }
+
+    public static async Task<string> RunPowerShellAsync(string script, int timeoutMs = 30_000,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RunPowerShellResultAsync(script, timeoutMs, cancellationToken).ConfigureAwait(false);
+        EnsureSuccess("PowerShell", result);
+        return result.StdOut.Trim();
     }
 }

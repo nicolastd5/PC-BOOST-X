@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace BoostParaPc.Services;
@@ -14,7 +15,7 @@ public static class OptimizationStateDetector
             return id switch
             {
                 "power.high" => IsHighPerformancePlan(),
-                "power.sleep" => true, // difícil de ler de forma confiável; confia no store
+                "power.sleep" => IsSleepDisabled(),
                 "game.mode" => GetDword(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled") == 1,
                 "game.fso" => GetDword(Registry.CurrentUser, @"System\GameConfigStore", "GameDVR_FSEBehavior") == 2,
                 "game.dvr" => GetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled") == 0
@@ -55,11 +56,14 @@ public static class OptimizationStateDetector
         var saved = OptimizationStateStore.Load();
         foreach (var item in items)
         {
-            if (saved.Contains(item.Id) || IsLikelyApplied(item.Id))
-            {
-                if (item.State == Models.ApplyState.NotApplied)
-                    item.State = Models.ApplyState.Applied;
-            }
+            // O timeout de suspensão é consultado no plano ativo. O marcador salvo
+            // não deve mascarar uma alteração feita fora do aplicativo.
+            var applied = item.Id == "power.sleep"
+                ? IsSleepDisabled()
+                : saved.Contains(item.Id) || IsLikelyApplied(item.Id);
+            // Recalcula também o caminho falso: depois de uma reversão ou de
+            // uma alteração externa, um estado antigo não pode permanecer na UI.
+            item.State = applied ? Models.ApplyState.Applied : Models.ApplyState.NotApplied;
         }
     }
 
@@ -81,6 +85,23 @@ public static class OptimizationStateDetector
         {
             return false;
         }
+    }
+
+    private static bool IsSleepDisabled()
+    {
+        foreach (var (subgroup, setting) in new[]
+                 { ("sub_sleep", "standbyidle"), ("sub_sleep", "hibernateidle"), ("sub_video", "videoidle") })
+        {
+            var result = ProcessRunner.RunAsync("powercfg", $"/query scheme_current {subgroup} {setting}", timeoutMs: 5_000)
+                .GetAwaiter().GetResult();
+            if (!result.Success) return false;
+            var match = Regex.Match(result.StdOut, @"(?im)^\s*.*\bAC\b.*?0x([0-9a-f]+)");
+            if (!match.Success || !uint.TryParse(match.Groups[1].Value,
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value) || value != 0)
+                return false;
+        }
+        return true;
     }
 
     private static int? GetDword(RegistryKey root, string key, string name)

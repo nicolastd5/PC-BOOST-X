@@ -15,7 +15,12 @@ public partial class MainViewModel : ObservableObject
     private string _statusMessage = "Pronto";
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NavigateCommand))]
     private bool _isBusy;
+
+    private Action? _cancelOperation;
+
+    public bool CanCancelOperation => IsBusy && _cancelOperation is not null;
 
     [ObservableProperty]
     private bool _isAdmin;
@@ -51,13 +56,16 @@ public partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        await Dashboard.InitializeAsync().ConfigureAwait(false);
-        await Gaming.InitializeAsync().ConfigureAwait(false);
+        await Dashboard.InitializeAsync();
+        await Gaming.InitializeAsync();
     }
 
-    [RelayCommand]
+    private bool CanNavigate() => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void Navigate(string page)
     {
+        if (IsBusy) return;
         CurrentPage = page;
         StatusMessage = page switch
         {
@@ -83,5 +91,44 @@ public partial class MainViewModel : ObservableObject
     {
         IsBusy = busy;
         if (message is not null) StatusMessage = message;
+        OnPropertyChanged(nameof(CanCancelOperation));
+        CancelOperationCommand.NotifyCanExecuteChanged();
+    }
+
+    public void SetCancellation(Action? cancel)
+    {
+        _cancelOperation = cancel;
+        OnPropertyChanged(nameof(CanCancelOperation));
+        CancelOperationCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCancelOperation))]
+    private void CancelOperation()
+    {
+        _cancelOperation?.Invoke();
+        StatusMessage = "Cancelando; aguardando a operação encerrar…";
+        SetCancellation(null);
+    }
+
+    public async Task RunOperationAsync(string message, Func<Task> operation)
+    {
+        if (IsBusy) return;
+        SetBusy(true, message);
+        try { await operation(); }
+        catch (OperationCanceledException) { StatusMessage = "Operação cancelada"; }
+        catch (Exception ex) { StatusMessage = $"Falha: {ex.Message}"; }
+        finally
+        {
+            SetCancellation(null);
+            SetBusy(false);
+        }
+    }
+
+    public async Task RequireRestorePointAsync(string description)
+    {
+        if (!Dashboard.RestorePointEnabled) return;
+        StatusMessage = "Criando e verificando ponto de restauração…";
+        if (!await RestorePointService.CreateAsync(description))
+            throw new InvalidOperationException("Operação interrompida: o ponto de restauração solicitado não foi criado. Verifique a Proteção do Sistema ou desmarque explicitamente essa opção para continuar sem ponto.");
     }
 }

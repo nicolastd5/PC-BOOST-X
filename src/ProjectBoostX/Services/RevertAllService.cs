@@ -1,102 +1,57 @@
 using System.IO;
-using BoostParaPc.Services;
+using System.Text.RegularExpressions;
 
 namespace BoostParaPc.Services;
 
-/// <summary>
-/// Reverte otimizações aplicadas: restaura backups de registro e limpa o estado salvo.
-/// </summary>
 public static class RevertAllService
 {
-    public sealed record RevertResult(int BackupsRestored, int BackupsFailed, string Message);
-
+    public sealed record RevertResult(int BackupsRestored, int BackupsFailed, string Message)
+    {
+        public bool Success => BackupsFailed == 0;
+    }
     public static async Task<RevertResult> RevertEverythingAsync(IProgress<string>? progress = null)
     {
-        return await Task.Run(() =>
+        int restored = 0;
+        try
         {
-            var dir = AppPaths.BackupDir;
-
-            int ok = 0, fail = 0;
-
-            if (Directory.Exists(dir))
+            await Task.Run(() =>
             {
-                // Mais antigo primeiro — restaura na ordem original
-                var files = Directory.GetFiles(dir, "*.json")
-                    .OrderBy(File.GetCreationTimeUtc)
-                    .ToList();
-
-                foreach (var file in files)
+                foreach (var file in RegistryBackupService.PendingBackups()
+                             .Where(f => !Path.GetFileName(f).StartsWith("startup_", StringComparison.Ordinal)))
                 {
                     progress?.Report($"Restaurando {Path.GetFileName(file)}…");
-                    try
-                    {
-                        var n = RegistryBackupService.RestoreBackup(file);
-                        if (n > 0) ok++;
-                        else fail++;
-                    }
-                    catch
-                    {
-                        fail++;
-                    }
+                    RegistryBackupService.RestoreAndArchive(file);
+                    restored++;
                 }
-            }
-
-            progress?.Report("Limpando histórico de otimizações…");
+            }).ConfigureAwait(false);
+            progress?.Report("Restaurando energia, serviços e inicialização…");
+            await SystemSettingsBackupService.RevertAllAsync().ConfigureAwait(false);
+            await StartupService.RevertAllAsync().ConfigureAwait(false);
+            await RevertServiceStartTypesAsync().ConfigureAwait(false);
             OptimizationStateStore.ClearAll();
-
-            // Alguns ajustes que não ficam em backup de registro
-            try
-            {
-                ProcessRunner.RunAsync("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e", timeoutMs: 8_000)
-                    .GetAwaiter().GetResult(); // Equilibrado
-            }
-            catch { }
-
-            try
-            {
-                ProcessRunner.RunAsync("powercfg", "/hibernate on", timeoutMs: 8_000).GetAwaiter().GetResult();
-            }
-            catch { }
-
-            var msg = ok > 0
-                ? $"{ok} backups restaurados, {fail} falhas. Plano Equilibrado reativado."
-                : fail > 0
-                    ? $"Nenhum backup restaurado ({fail} falhas). Pode ser preciso reiniciar o PC."
-                    : "Nenhum backup encontrado — nada para reverter no registro.";
-
-            return new RevertResult(ok, fail, msg);
-        }).ConfigureAwait(false);
+            return new(restored, 0, "Reversão concluída. Restaurados apenas os ajustes com backup. Alguns ajustes exigem reiniciar o Windows.");
+        }
+        catch (Exception ex)
+        {
+            return new(restored, 1, $"Reversão incompleta: {ex.Message}. Backups pendentes e histórico preservados.");
+        }
     }
-
+    /// <summary>Compatibilidade com dumps antigos; não inventa estado de execução ausente no backup.</summary>
     public static async Task RevertServiceStartTypesAsync()
     {
-        await Task.Run(() =>
+        foreach (var file in Directory.GetFiles(AppPaths.BackupDir, "service_*.txt").OrderByDescending(Path.GetFileName))
         {
-            var dir = AppPaths.BackupDir;
-            if (!Directory.Exists(dir)) return;
-
-            foreach (var file in Directory.GetFiles(dir, "service_*.txt"))
-            {
-                try
-                {
-                    var name = Path.GetFileName(file)
-                        .Replace("service_", "")
-                        .Split('_')[0];
-
-                    // Extrai START_TYPE do dump do sc qc
-                    var text = File.ReadAllText(file);
-                    string start = "demand";
-                    if (text.Contains("AUTO_START")) start = "auto";
-                    else if (text.Contains("DEMAND_START")) start = "demand";
-                    else if (text.Contains("DISABLED")) start = "disabled";
-
-                    ProcessRunner.RunAsync("sc", $"config {name} start= {start}", timeoutMs: 8_000)
-                        .GetAwaiter().GetResult();
-                    ProcessRunner.RunAsync("sc", $"start {name}", timeoutMs: 8_000)
-                        .GetAwaiter().GetResult();
-                }
-                catch { }
-            }
-        }).ConfigureAwait(false);
+            var match = Regex.Match(Path.GetFileName(file), @"\Aservice_(.+)_\d{8}_\d{6}\.txt\z");
+            if (!match.Success) throw new InvalidDataException($"Nome de backup de serviço inválido: {Path.GetFileName(file)}");
+            var name = match.Groups[1].Value;
+            if (!Regex.IsMatch(name, @"\A[A-Za-z0-9_.-]+\z")) throw new InvalidDataException("Nome de serviço inválido");
+            var dump = File.ReadAllText(file);
+            string? start = dump.Contains("AUTO_START", StringComparison.Ordinal) ? "auto"
+                : dump.Contains("DEMAND_START", StringComparison.Ordinal) ? "demand"
+                : dump.Contains("DISABLED", StringComparison.Ordinal) ? "disabled" : null;
+            if (start is null) throw new InvalidDataException($"Backup antigo de {name} não contém o tipo de inicialização");
+            await ProcessRunner.RunCheckedAsync("sc.exe", $"config \"{name}\" start= {start}", timeoutMs: 8_000).ConfigureAwait(false);
+            RegistryBackupService.Archive(file);
+        }
     }
 }
