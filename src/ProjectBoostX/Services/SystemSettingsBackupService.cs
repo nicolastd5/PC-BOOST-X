@@ -22,13 +22,15 @@ public static class SystemSettingsBackupService
     private sealed record Journal(string Version, DateTime CreatedUtc, string Kind,
         PowerValueState? PowerValue = null, PlanState? Plan = null, ServiceState? Service = null,
         HibernationState? Hibernation = null, TcpState? Tcp = null, TasksState? Tasks = null,
-        string? Owner = null);
+        string? Owner = null, TaskState? Task = null, DnsState? Dns = null);
     private sealed record PowerValueState(string Plan, string Subgroup, string Setting, uint Ac, uint Dc);
     private sealed record PlanState(string OriginalPlan, string TargetPlan, string? CreatedPlan);
     private sealed record ServiceState(string Name, int Start, int? DelayedAutoStart, bool Running);
     private sealed record HibernationState(int? HibernateEnabled, int? HiberFileType, int? HiberFileSizePercent);
     private sealed record TcpState(Dictionary<string, string> Profiles);
     private sealed record TasksState(Dictionary<string, bool> Enabled);
+    private sealed record DnsState(int InterfaceIndex, string[] Servers, bool Static);
+    private sealed record TaskState(string Path, string Name, bool Enabled);
 
     private static string JournalDir => Path.Combine(AppPaths.BackupDir, "commands");
 
@@ -154,6 +156,44 @@ public static class SystemSettingsBackupService
         }
     }
 
+    /// <summary>Desativa uma tarefa agendada guardando o estado anterior (e o caminho dela) no journal.</summary>
+    public static async Task DisableScheduledTaskAsync(string taskPath, string taskName, string? owner = null)
+    {
+        var cancellationToken = CancellationToken.None;
+        ValidateTaskPath(taskPath); ValidateServiceName(taskName);
+        var output = await ProcessRunner.RunPowerShellAsync(
+            $"Get-ScheduledTask -TaskPath '{EscapePowerShell(taskPath)}' -TaskName '{EscapePowerShell(taskName)}' | Select-Object TaskName,State | ConvertTo-Json -Compress",
+            timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!ParseTaskStates(output).TryGetValue(taskName, out var enabled))
+            throw new InvalidDataException("A tarefa agendada não foi encontrada.");
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Task", Task: new(taskPath, taskName, enabled), Owner: owner));
+        await ProcessRunner.RunPowerShellAsync(
+            $"Disable-ScheduledTask -TaskPath '{EscapePowerShell(taskPath)}' -TaskName '{EscapePowerShell(taskName)}' -ErrorAction Stop | Out-Null",
+            timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Troca o DNS IPv4 de uma interface. O journal guarda os endereços anteriores ou "automático".</summary>
+    public static async Task SetDnsAsync(int interfaceIndex, string[] servers, string? owner = null)
+    {
+        var cancellationToken = CancellationToken.None;
+        ValidateDnsServers(servers);
+        var output = await ProcessRunner.RunPowerShellAsync(
+            $"$g = (Get-NetAdapter -InterfaceIndex {interfaceIndex}).InterfaceGuid; " +
+            "$ns = (Get-ItemProperty -Path ('HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\' + $g) -Name NameServer -ErrorAction SilentlyContinue).NameServer; " +
+            $"[pscustomobject]@{{ Servers = @((Get-DnsClientServerAddress -InterfaceIndex {interfaceIndex} -AddressFamily IPv4).ServerAddresses); Static = [bool]$ns }} | ConvertTo-Json -Compress",
+            timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(output);
+        var previous = doc.RootElement.TryGetProperty("Servers", out var list)
+            ? (list.ValueKind == JsonValueKind.Array ? list.EnumerateArray().Select(e => e.GetString()!).ToArray() : [list.GetString()!])
+            : [];
+        var isStatic = doc.RootElement.TryGetProperty("Static", out var st) && st.ValueKind == JsonValueKind.True;
+        ValidateDnsServers(previous);
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Dns", Dns: new(interfaceIndex, previous, isStatic), Owner: owner));
+        await ProcessRunner.RunPowerShellAsync(
+            $"Set-DnsClientServerAddress -InterfaceIndex {interfaceIndex} -ServerAddresses {string.Join(",", servers)}",
+            timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     public static Task RevertAllAsync() => RevertAsync(null);
 
     /// <summary>Reverte os journals pendentes do dono informado; <c>null</c> reverte todos.</summary>
@@ -246,6 +286,24 @@ public static class SystemSettingsBackupService
                 }
                 break;
             }
+            case "Task":
+            {
+                var s = journal.Task ?? throw new InvalidDataException("Journal de tarefa incompleto.");
+                ValidateTaskPath(s.Path); ValidateServiceName(s.Name);
+                var command = s.Enabled ? "Enable-ScheduledTask" : "Disable-ScheduledTask";
+                await ProcessRunner.RunPowerShellAsync($"{command} -TaskPath '{EscapePowerShell(s.Path)}' -TaskName '{EscapePowerShell(s.Name)}' -ErrorAction Stop | Out-Null", 15_000, ct).ConfigureAwait(false);
+                break;
+            }
+            case "Dns":
+            {
+                var s = journal.Dns ?? throw new InvalidDataException("Journal de DNS incompleto.");
+                ValidateDnsServers(s.Servers);
+                var script = s.Static && s.Servers.Length > 0
+                    ? $"Set-DnsClientServerAddress -InterfaceIndex {s.InterfaceIndex} -ServerAddresses {string.Join(",", s.Servers)}"
+                    : $"Set-DnsClientServerAddress -InterfaceIndex {s.InterfaceIndex} -ResetServerAddresses";
+                await ProcessRunner.RunPowerShellAsync(script, 15_000, ct).ConfigureAwait(false);
+                break;
+            }
             default: throw new InvalidDataException($"Tipo de journal desconhecido: {journal.Kind}");
         }
     }
@@ -275,6 +333,8 @@ public static class SystemSettingsBackupService
         var dir = Path.Combine(JournalDir, "restored"); Directory.CreateDirectory(dir);
         File.Move(file, Path.Combine(dir, Path.GetFileName(file) + "." + Guid.NewGuid().ToString("N")));
     }
+    private static void ValidateTaskPath(string path) { if (!Regex.IsMatch(path, @"\A\\([A-Za-z0-9 _.-]+\\)*\z")) throw new InvalidDataException("Caminho de tarefa inválido."); }
+    private static void ValidateDnsServers(IEnumerable<string> servers) { foreach (var s in servers) if (!System.Net.IPAddress.TryParse(s, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) throw new InvalidDataException("Endereço DNS inválido."); }
     private static string EscapePowerShell(string value) => value.Replace("'", "''", StringComparison.Ordinal);
     private static void ValidateServiceName(string name) { if (!SafeName.IsMatch(name)) throw new InvalidDataException("Nome de serviço/tarefa inválido."); }
     private static void ValidatePowerToken(string value, string parameter) { if (!Regex.IsMatch(value, @"\A[A-Za-z0-9_.-]+\z")) throw new ArgumentException("Token powercfg inválido", parameter); }

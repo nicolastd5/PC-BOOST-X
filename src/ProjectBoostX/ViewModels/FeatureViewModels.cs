@@ -497,9 +497,9 @@ public partial class StartupViewModel : ObservableObject
     [RelayCommand]
     private Task LoadAsync() => _main.RunOperationAsync("Carregando itens de inicialização…", async () =>
     {
-        var list = await StartupService.GetItemsAsync();
+        var list = (await StartupService.GetItemsAsync()).Concat(await StartupTasks.GetAsync());
         Items.Clear();
-        foreach (var i in list) Items.Add(i);
+        foreach (var i in list.OrderBy(i => i.Name)) Items.Add(i);
         _main.StatusMessage = $"{Items.Count} itens de inicialização";
     });
 
@@ -509,7 +509,8 @@ public partial class StartupViewModel : ObservableObject
         if (item is null) return;
         await _main.RequireRestorePointAsync("Project Boost X - Inicialização");
         _main.StatusMessage = $"Desativando {item.Name}…";
-        await StartupService.DisableAsync(item);
+        if (item.Source == StartupTasks.Source) await StartupTasks.DisableAsync(item);
+        else await StartupService.DisableAsync(item);
         item.IsEnabled = false;
         _main.StatusMessage = $"{item.Name} desativado (backup salvo)";
     });
@@ -519,7 +520,8 @@ public partial class StartupViewModel : ObservableObject
     {
         if (item is null) return;
         _main.StatusMessage = $"Reativando {item.Name}…";
-        await StartupService.EnableAsync(item);
+        if (item.Source == StartupTasks.Source) await StartupTasks.EnableAsync(item);
+        else await StartupService.EnableAsync(item);
         item.IsEnabled = true;
         _main.StatusMessage = $"{item.Name} reativado";
     });

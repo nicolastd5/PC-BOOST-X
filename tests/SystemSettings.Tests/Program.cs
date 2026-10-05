@@ -102,6 +102,40 @@ var cases = new (string Name, Func<Task> Run)[]
         await Call("RevertAllAsync");
         Equal(true, ProcessRunner.Tasks["Consolidator"]); Equal(false, ProcessRunner.Tasks["UsbCeip"]);
     }),
+    ("Scheduled startup task is disabled per owner and restored with its path", async () =>
+    {
+        ProcessRunner.Tasks["MyUpdater"] = true;
+        await Call("DisableScheduledTaskAsync", @"\Vendor\", "MyUpdater", "startup.task.MyUpdater");
+        Equal(false, ProcessRunner.Tasks["MyUpdater"]);
+        Require(ProcessRunner.Mutations.Any(m => m.Contains(@"-TaskPath '\Vendor\'")), "Task path was not passed to Disable-ScheduledTask.");
+        await Call("RevertAsync", "other.owner");
+        Equal(false, ProcessRunner.Tasks["MyUpdater"]);
+        await Call("RevertAsync", "startup.task.MyUpdater");
+        Equal(true, ProcessRunner.Tasks["MyUpdater"]);
+    }),
+    ("Scheduled task path and name injection is rejected before any mutation", async () =>
+    {
+        ProcessRunner.Tasks["MyUpdater"] = true;
+        await Throws(() => Call("DisableScheduledTaskAsync", @"\Vendor'; Stop-Computer; '\", "MyUpdater"));
+        await Throws(() => Call("DisableScheduledTaskAsync", @"\Vendor\", "x'; Stop-Computer; '"));
+        Equal(0, ProcessRunner.Mutations.Count);
+    }),
+    ("DNS change is journaled and reverts to automatic or to the previous static servers", async () =>
+    {
+        await Call("SetDnsAsync", 7, new[] { "1.1.1.1", "1.0.0.1" }, "tools.dns");
+        Equal("1.1.1.1,1.0.0.1", string.Join(",", ProcessRunner.DnsServers)); Equal(true, ProcessRunner.DnsStatic);
+        await Call("RevertAsync", "tools.dns");
+        Equal(false, ProcessRunner.DnsStatic);
+        ProcessRunner.DnsServers = ["8.8.8.8"]; ProcessRunner.DnsStatic = true;
+        await Call("SetDnsAsync", 7, new[] { "9.9.9.9" }, "tools.dns");
+        await Call("RevertAsync", "tools.dns");
+        Equal("8.8.8.8", string.Join(",", ProcessRunner.DnsServers)); Equal(true, ProcessRunner.DnsStatic);
+    }),
+    ("DNS server addresses are validated before any mutation", async () =>
+    {
+        await Throws(() => Call("SetDnsAsync", 7, new[] { "1.1.1.1; Stop-Computer" }, null!));
+        Equal(0, ProcessRunner.Mutations.Count);
+    }),
     ("Failed restore preserves pending journals and stops before older entries", async () =>
     {
         await Call("SetPowerValueAsync", "sub_sleep", "standbyidle", 0u, true);

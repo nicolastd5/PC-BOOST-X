@@ -306,6 +306,22 @@ cases.AddRange(
         Require(!back.RequireRestorePoint && back.FirstRunAcknowledged, "Valores salvos não foram relidos.");
         return Task.CompletedTask;
     }),
+    ("DNS: pacote de consulta é montado e a resposta é validada", () =>
+    {
+        var q = DnsBenchmark.BuildQuery("www.a.com", 0x1234);
+        Equal("1234 0100 0001 0000 0000 0000", string.Join(" ", Enumerable.Range(0, 6).Select(i => $"{q[i * 2]:x2}{q[i * 2 + 1]:x2}")));
+        Equal(3, (int)q[12]);                                   // tamanho do rótulo "www"
+        Equal("0000010001", Convert.ToHexString(q[^5..]).ToLowerInvariant());   // fim do nome, tipo A, classe IN
+        byte[] ok = [0x12, 0x34, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0];
+        Require(DnsBenchmark.IsValidResponse(ok, 0x1234), "Resposta válida foi recusada.");
+        Require(!DnsBenchmark.IsValidResponse(ok, 0x9999), "Id errado foi aceito.");
+        byte[] nxdomain = [0x12, 0x34, 0x81, 0x83, 0, 1, 0, 0, 0, 0, 0, 0];
+        Require(!DnsBenchmark.IsValidResponse(nxdomain, 0x1234), "Erro DNS foi aceito.");
+        Require(!DnsBenchmark.IsValidResponse([1, 2, 3], 1), "Pacote curto foi aceito.");
+        Equal(2.0, DnsBenchmark.Median([5.0, 1.0, 2.0]));
+        Equal(2.5, DnsBenchmark.Median([1.0, 2.0, 3.0, 4.0]));
+        return Task.CompletedTask;
+    }),
     ("Limpar memória em espera é ação pontual", async () =>
     {
         var standby = OptimizationCatalog.All.Single(i => i.Id == "tools.standby");

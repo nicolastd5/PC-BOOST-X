@@ -18,6 +18,8 @@ public static class ProcessRunner
     public static Dictionary<string, string> Tcp { get; } = new(StringComparer.OrdinalIgnoreCase);
     public static Dictionary<string, bool> Tasks { get; } = new(StringComparer.OrdinalIgnoreCase);
     public static bool ServiceRunning { get; set; }
+    public static string[] DnsServers { get; set; } = ["192.168.0.1"];
+    public static bool DnsStatic { get; set; }
     public static string? FailContains { get; set; }
     public static bool InvalidPowerQuery { get; set; }
     public static bool LocalizedPowerQuery { get; set; }
@@ -36,6 +38,7 @@ public static class ProcessRunner
         Values["sub_processor PROCTHROTTLEMAX"] = (75, 50);
         Tcp.Clear(); Tcp["Internet"] = "Restricted"; Tcp["InternetCustom"] = "Disabled";
         Tasks.Clear(); Tasks["Consolidator"] = true; Tasks["UsbCeip"] = false;
+        DnsServers = ["192.168.0.1"]; DnsStatic = false;
         ServiceRunning = true; FailContains = null; InvalidPowerQuery = false; InvalidServiceRead = false;
         LocalizedPowerQuery = false;
         BeforeMutation = null; Mutations.Clear(); DuplicateTemplates.Clear();
@@ -113,8 +116,15 @@ public static class ProcessRunner
             return Task.FromResult(JsonSerializer.Serialize(Tasks.Select(p => new { TaskName = p.Key, Enabled = p.Value })));
         if (script.Contains("Get-Service") && !script.Contains("WaitForStatus"))
             return Task.FromResult(InvalidServiceRead ? "Unknown" : ServiceRunning ? "Running" : "Stopped");
+        if (script.Contains("Get-DnsClientServerAddress") && !script.Contains("Set-DnsClientServerAddress"))
+            return Task.FromResult(JsonSerializer.Serialize(new { Servers = DnsServers, Static = DnsStatic }));
         Mutate(script);
-        if (script.Contains("Set-NetTCPSetting"))
+        if (script.Contains("Set-DnsClientServerAddress"))
+        {
+            if (script.Contains("-ResetServerAddresses")) { DnsServers = ["192.168.0.1"]; DnsStatic = false; }
+            else { DnsServers = Regex.Match(script, @"-ServerAddresses (\S+)").Groups[1].Value.Split(','); DnsStatic = true; }
+        }
+        else if (script.Contains("Set-NetTCPSetting"))
         {
             var name = Regex.Match(script, "-SettingName '([^']+)'").Groups[1].Value;
             var level = Regex.Match(script, "-AutoTuningLevelLocal '?([A-Za-z]+)'?").Groups[1].Value;
