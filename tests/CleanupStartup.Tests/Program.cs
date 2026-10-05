@@ -69,6 +69,26 @@ await Test("default cleanup scopes protect Explorer and Firefox profile files", 
     Assert(File.Exists(Path.Combine(explorer, "settings.dat")), "Explorer non-cache data was deleted.");
     Assert(File.Exists(Path.Combine(firefox, "logins.json")), "Firefox profile data was deleted.");
 });
+await Test("extra cleanup targets: one per Chromium profile, Steam shaders off by default, scoped deletion keeps profile data", async dir =>
+{
+    var local = Path.Combine(dir, "local");
+    var chrome = Path.Combine(local, "Google", "Chrome", "User Data");
+    foreach (var profile in new[] { "Default", "Profile 1", "Guest Profile" })
+        Directory.CreateDirectory(Path.Combine(chrome, profile));
+    Directory.CreateDirectory(Path.Combine(chrome, "Profile 1", "Cache", "Cache_Data"));
+    File.WriteAllText(Path.Combine(chrome, "Profile 1", "Cache", "Cache_Data", "f_1"), "cache");
+    File.WriteAllText(Path.Combine(chrome, "Profile 1", "Login Data"), "keep passwords");
+    var build = typeof(CleanupService).GetMethod("BuildExtraTargets", BindingFlags.Static | BindingFlags.NonPublic);
+    Assert(build is not null, "BuildExtraTargets is missing.");
+    var targets = ((IEnumerable<CleanupTarget>)build!.Invoke(null, [local, Path.Combine(dir, "roaming"), Path.Combine(dir, "common"), Path.Combine(dir, "steam")])!).ToList();
+    Assert(targets.Count(t => t.Name.StartsWith("Cache do Chrome")) == 6, "Expected 3 caches for each of the two Chromium profiles.");
+    Assert(!targets.Any(t => t.Path.Contains("Guest Profile")), "Non-profile folder became a target.");
+    Assert(!targets.Single(t => t.Name == "Cache de shaders da Steam").Selected, "Steam shader cache is selected by default.");
+    var scoped = targets.Where(t => t.Path.StartsWith(Path.Combine(chrome, "Profile 1"))).ToList();
+    var result = await CleanupService.CleanAsync(scoped);
+    Assert(result.FilesRemoved == 1, "Chromium cache file was not removed.");
+    Assert(File.Exists(Path.Combine(chrome, "Profile 1", "Login Data")), "Chromium profile data was deleted.");
+});
 await Test("cleanup refuses dangerous root directories before enumeration", dir =>
 {
     var safeRoot = typeof(CleanupService).GetMethod("IsSafeRoot", BindingFlags.Static | BindingFlags.NonPublic);

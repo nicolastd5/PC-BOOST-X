@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Enumeration;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace BoostParaPc.Services;
 
@@ -23,9 +24,7 @@ public static class CleanupService
                 searchPattern: "thumbcache_*.db", recursive: false),
             new("Cache do DirectX", Path.Combine(local, "D3DSCache"), 0),
             new("Logs de erro", Path.Combine(windows, "Minidump"), 0),
-            new("CrashDumps", Path.Combine(local, "CrashDumps"), 0),
-            new("Cache do Edge", Path.Combine(local, "Microsoft", "Edge", "User Data", "Default", "Cache"), 0),
-            new("Cache do Chrome", Path.Combine(local, "Google", "Chrome", "User Data", "Default", "Cache"), 0)
+            new("CrashDumps", Path.Combine(local, "CrashDumps"), 0)
         };
 
         var profiles = Path.Combine(local, "Mozilla", "Firefox", "Profiles");
@@ -45,10 +44,54 @@ public static class CleanupService
         return targets.DistinctBy(t => t.Path, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    private static readonly string[] ChromiumCaches = [@"Cache\Cache_Data", "Code Cache", "GPUCache"];
+
+    /// <summary>Navegadores Chromium (todos os perfis), shaders, Otimização de Entrega, relatórios de erro e apps.</summary>
+    internal static IReadOnlyList<CleanupTarget> BuildExtraTargets(string local, string roaming, string common, string steamShaderCache)
+    {
+        var targets = new List<CleanupTarget>();
+        (string Name, string Root)[] browsers =
+        [
+            ("Chrome", Path.Combine(local, "Google", "Chrome", "User Data")),
+            ("Edge", Path.Combine(local, "Microsoft", "Edge", "User Data")),
+            ("Brave", Path.Combine(local, "BraveSoftware", "Brave-Browser", "User Data"))
+        ];
+        foreach (var (name, root) in browsers)
+        {
+            if (!Directory.Exists(root)) continue;
+            try
+            {
+                foreach (var profile in Directory.EnumerateDirectories(root)
+                             .Where(d => Path.GetFileName(d) is var n && (n == "Default" || n.StartsWith("Profile ", StringComparison.Ordinal))))
+                    foreach (var cache in ChromiumCaches)
+                        targets.Add(new CleanupTarget($"Cache do {name} ({Path.GetFileName(profile)}: {Path.GetFileName(cache)})", Path.Combine(profile, cache), 0));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        string[] shaders = [@"NVIDIA\DXCache", @"NVIDIA\GLCache", @"AMD\DxCache", @"AMD\DxcCache", @"Intel\ShaderCache"];
+        foreach (var shader in shaders)
+            targets.Add(new CleanupTarget("Cache de shaders (" + shader.Replace('\\', ' ') + ")", Path.Combine(local, shader), 0));
+        targets.Add(new CleanupTarget("Cache de shaders da Steam", steamShaderCache, 0, selected: false));
+
+        targets.Add(new CleanupTarget("Relatórios de erro (fila)", Path.Combine(common, "Microsoft", "Windows", "WER", "ReportQueue"), 0));
+        targets.Add(new CleanupTarget("Relatórios de erro (arquivo)", Path.Combine(common, "Microsoft", "Windows", "WER", "ReportArchive"), 0));
+        foreach (var folder in new[] { "Cache", "Code Cache", "GPUCache" })
+            targets.Add(new CleanupTarget($"Cache do Discord ({folder})", Path.Combine(roaming, "discord", folder), 0));
+        targets.Add(new CleanupTarget("Cache do Spotify", Path.Combine(local, "Spotify", "Data"), 0));
+        targets.Add(new CleanupTarget("Cache de Otimização de Entrega", "Delivery Optimization", 0, isDeliveryOptimization: true));
+        return targets;
+    }
+
     public static Task<IReadOnlyList<CleanupTarget>> ScanAsync(IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        var targets = BuildTargets(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Path.GetTempPath());
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var targets = BuildTargets(Environment.GetFolderPath(Environment.SpecialFolder.Windows), local, Path.GetTempPath())
+            .Concat(BuildExtraTargets(local, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam", "steamapps", "shadercache")))
+            .DistinctBy(t => t.Path, StringComparer.OrdinalIgnoreCase).ToList();
         return ScanTargetsAsync(targets, progress, ct);
     }
 
@@ -62,7 +105,8 @@ public static class CleanupService
             foreach (var target in targets)
             {
                 ct.ThrowIfCancellationRequested();
-                if (target.IsRecycleBin) { found.Add(target); continue; }
+                if (target.IsDeliveryOptimization) { found.Add(target); continue; }
+                if (target.IsRecycleBin) { target.SizeBytes = RecycleBinBytes(); found.Add(target); continue; }
                 progress?.Report($"Analisando {target.Name}…");
                 var result = ProcessTarget(target, delete: false, ct, budgetMs, maxFiles);
                 if (result.Bytes > 0 || result.Errors > 0 || result.Incomplete)
@@ -86,6 +130,18 @@ public static class CleanupService
         foreach (var target in selected.Where(t => t.Selected).DistinctBy(t => t.Path, StringComparer.OrdinalIgnoreCase))
         {
             ct.ThrowIfCancellationRequested();
+            if (target.IsDeliveryOptimization)
+            {
+                progress?.Report("Limpando cache de Otimização de Entrega…");
+                try
+                {
+                    await ProcessRunner.RunPowerShellAsync("Delete-DeliveryOptimizationCache -Force", 60_000, ct).ConfigureAwait(false);
+                    details.Add("Cache de Otimização de Entrega limpo; o tamanho não está incluído no total.");
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { errors++; details.Add($"Otimização de Entrega não concluída: {ex.Message}"); }
+                continue;
+            }
             if (target.IsRecycleBin)
             {
                 progress?.Report("Esvaziando lixeira…");
@@ -124,6 +180,22 @@ public static class CleanupService
             progress?.Report(message);
         }
         return new Models.CleanupResult(freed, files, errors, details);
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct RecycleBinInfo { public int Size; public long Bytes; public long Items; }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHQueryRecycleBin(string? rootPath, ref RecycleBinInfo info);
+
+    private static long RecycleBinBytes()
+    {
+        try
+        {
+            var info = new RecycleBinInfo { Size = Marshal.SizeOf<RecycleBinInfo>() };
+            return SHQueryRecycleBin(null, ref info) == 0 ? info.Bytes : 0;
+        }
+        catch { return 0; }
     }
 
     internal sealed record Outcome(long Bytes, int Files, int Errors, bool Incomplete);
@@ -242,21 +314,23 @@ public sealed class CleanupTarget : INotifyPropertyChanged
 {
     private bool _selected;
     public CleanupTarget(string name, string path, long sizeBytes, bool selected = true,
-        bool isRecycleBin = false, bool onlyRecent = false, string searchPattern = "*", bool recursive = true)
+        bool isRecycleBin = false, bool onlyRecent = false, string searchPattern = "*", bool recursive = true,
+        bool isDeliveryOptimization = false)
     {
         Name = name; Path = path; SizeBytes = sizeBytes; _selected = selected;
-        IsRecycleBin = isRecycleBin; OnlyRecent = onlyRecent;
+        IsRecycleBin = isRecycleBin; OnlyRecent = onlyRecent; IsDeliveryOptimization = isDeliveryOptimization;
         SearchPattern = searchPattern; Recursive = recursive;
     }
     public string Name { get; }
     public string Path { get; }
     public long SizeBytes { get; internal set; }
     public bool IsRecycleBin { get; }
+    public bool IsDeliveryOptimization { get; }
     public bool OnlyRecent { get; }
     internal string SearchPattern { get; }
     internal bool Recursive { get; }
     public bool IsPartial { get; internal set; }
-    public string SizeDisplay => IsRecycleBin ? "Tamanho não calculado" :
+    public string SizeDisplay => IsDeliveryOptimization || (IsRecycleBin && SizeBytes == 0) ? "Tamanho não calculado" :
         CleanupService.FormatBytes(SizeBytes) + (IsPartial ? " (parcial)" : "");
     public bool Selected
     {
