@@ -397,6 +397,12 @@ cases.AddRange(
         Equal((0.0, 5.0), SparklineMath.ToPoints([50], 90, 10, 100)[0]);
         return Task.CompletedTask;
     }),
+    ("Tarefa de inicialização com o Windows: aspas do caminho e privilégio máximo", () =>
+    {
+        var args = StartupTaskService.BuildCreateArguments(@"C:\Program Files\Boost\ProjectBoostX.exe");
+        Equal("/create /tn \"ProjectBoostX\" /tr \"\\\"C:\\Program Files\\Boost\\ProjectBoostX.exe\\\" --tray\" /sc onlogon /rl highest /f", args);
+        return Task.CompletedTask;
+    }),
     ("Limpar memória em espera é ação pontual", async () =>
     {
         var standby = OptimizationCatalog.All.Single(i => i.Id == "tools.standby");

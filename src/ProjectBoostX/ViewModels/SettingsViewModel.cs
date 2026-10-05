@@ -33,7 +33,10 @@ public partial class SettingsViewModel : ObservableObject, IScreen
     }
 
     public Task ActivateAsync() => Task.CompletedTask;
-    public void Deactivate() => SaveBackgroundApps();
+    public void Deactivate() { }
+
+    // O TextBox só atualiza ao perder o foco; salvar aqui cobre fechar o programa dentro da tela.
+    partial void OnBackgroundAppsChanged(string value) => SaveBackgroundApps();
 
     private void Save(Action change)
     {

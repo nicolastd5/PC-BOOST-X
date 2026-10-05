@@ -97,6 +97,16 @@ public partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         if (_screens["Home"].Value is IScreen home) await home.ActivateAsync();
+        _ = CheckForUpdateAsync();
+    }
+
+    /// <summary>Só avisa; nunca baixa nem instala. Falha de rede é silenciosa.</summary>
+    private async Task CheckForUpdateAsync()
+    {
+        if (!AppSettings.Current.CheckForUpdates) return;
+        var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(3, 0, 0);
+        var update = await UpdateService.CheckAsync(version);
+        if (update is not null) StatusMessage = $"Há uma versão nova ({update.Version}): {update.Url}";
     }
 
     [RelayCommand]

@@ -90,7 +90,7 @@ public partial class HomeViewModel : ObservableObject, IScreen
             Findings.Clear();
             foreach (var f in findings.OrderByDescending(f => f.Severity)) Findings.Add(f);
             HealthScore = Diagnostics.Score(findings);
-            HealthText = findings.Count == 0 ? "Nenhum problema encontrado" : $"{findings.Count} pontos de atenção";
+            HealthText = findings.Count switch { 0 => "Nenhum problema encontrado", 1 => "1 ponto de atenção", var n => $"{n} pontos de atenção" };
         }
         catch (Exception ex) { HealthText = "Não foi possível analisar: " + ex.Message; }
         finally { IsDiagnosing = false; }
