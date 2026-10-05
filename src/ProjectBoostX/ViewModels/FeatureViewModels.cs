@@ -31,23 +31,23 @@ public partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<OptimizationItem> QuickWins { get; } = [];
 
+    private static readonly string[] QuickWinIds =
+        ["power.high", "game.mode", "game.dvr", "visual.transparency", "telemetry.off", "sys.startupdelay"];
+
     public DashboardViewModel(MainViewModel main)
     {
         _main = main;
-
-        // Quick wins seguros — não bloqueia a UI na construção
-        foreach (var id in new[] { "power.high", "game.mode", "game.dvr", "visual.transparency", "telemetry.off", "sys.startupdelay" })
-        {
-            var item = OptimizationCatalog.CreateAll().FirstOrDefault(o => o.Id == id);
-            if (item is not null) QuickWins.Add(item);
-        }
-        SelectedCount = QuickWins.Count(i => i.IsSelected);
+        foreach (var item in OptimizationCatalog.All.Where(i => QuickWinIds.Contains(i.Id)))
+            QuickWins.Add(item);
     }
 
     public async Task InitializeAsync()
     {
-        await Task.Run(() => OptimizationStateDetector.ApplyTo(QuickWins));
+        await Task.Run(() => OptimizationEngine.Refresh(QuickWins));
+        foreach (var item in QuickWins)
+            item.IsSelected = item.State != ApplyState.Applied && item.IsRecommended;
         AppliedCount = QuickWins.Count(i => i.State == ApplyState.Applied);
+        SelectedCount = QuickWins.Count(i => i.IsSelected);
         await RefreshInfoAsync();
     }
 
@@ -60,21 +60,14 @@ public partial class DashboardViewModel : ObservableObject
     {
         try
         {
-            var plan = await SystemInfoService.GetCurrentPowerPlanAsync().ConfigureAwait(false);
-            var gameMode = await Task.Run(() => GameOptimizationService.DescribeCurrentGameMode()).ConfigureAwait(false);
-
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                PowerPlan = plan;
-                GameModeStatus = gameMode;
-            });
+            PowerPlan = await Task.Run(PowerNative.ActiveSchemeName);
+            GameModeStatus = await Task.Run(() =>
+                RegistryBackupService.GetDword(Microsoft.Win32.Registry.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled") == 1
+                    ? "Ativado" : "Desativado / padrão");
         }
         catch
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                PowerPlan = "Desconhecido";
-            });
+            PowerPlan = "Desconhecido";
         }
     }
 
@@ -94,22 +87,8 @@ public partial class DashboardViewModel : ObservableObject
         foreach (var item in selected)
         {
             _main.StatusMessage = $"Aplicando: {item.Name}";
-            try
-            {
-                item.State = await OptimizationCatalog.ApplyAsync(item);
-                if (item.State == ApplyState.Applied)
-                {
-                    OptimizationStateStore.MarkMany([item.Id]);
-                    ok++;
-                }
-                else fail++;
-            }
-            catch (Exception ex)
-            {
-                fail++;
-                item.State = ApplyState.Failed;
-                item.StatusMessage = ex.Message;
-            }
+            if (await OptimizationEngine.ApplyAsync(item) == ApplyState.Applied) ok++;
+            else fail++;
         }
 
         // Desmarca o que já ficou aplicado pra não pedir de novo
@@ -137,6 +116,7 @@ public partial class DashboardViewModel : ObservableObject
 
         if (result.Success)
         {
+            await Task.Run(() => OptimizationEngine.Refresh(OptimizationCatalog.All));
             await InitializeAsync();
             await _main.Gaming.InitializeAsync();
             foreach (var item in QuickWins)
@@ -160,66 +140,69 @@ public partial class GamingViewModel : ObservableObject
     public GamingViewModel(MainViewModel main)
     {
         _main = main;
-        foreach (var item in OptimizationCatalog.CreateAll()
-                     .Where(i => i.Category is OptimizationCategory.Gaming
-                         or OptimizationCategory.Power
-                         or OptimizationCategory.Network
-                         or OptimizationCategory.Input))
-        {
-            Items.Add(item);
-        }
+        foreach (var item in OptimizationCatalog.All) Items.Add(item);
     }
 
     public async Task InitializeAsync()
     {
-        await Task.Run(() => OptimizationStateDetector.ApplyTo(Items));
+        await Task.Run(() => OptimizationEngine.Refresh(Items));
+        SelectRecommended();
+    }
+
+    /// <summary>A seleção automática só marca o que é seguro e indicado para este PC.</summary>
+    private void SelectRecommended()
+    {
         foreach (var item in Items)
-            item.IsSelected = item.State != ApplyState.Applied;
+            item.IsSelected = SelectAll && !item.IsAction && item.IsRecommended
+                              && item.Risk == RiskLevel.Safe && item.State != ApplyState.Applied;
     }
 
     [RelayCommand]
-    private Task ApplySelectedAsync() => _main.RunOperationAsync("Aplicando otimizações de jogo…", async () =>
+    private void ToggleSelectAll() => SelectRecommended();
+
+    [RelayCommand]
+    private Task ApplySelectedAsync() => _main.RunOperationAsync("Aplicando otimizações…", async () =>
     {
-        var selected = Items.Where(i => i.IsSelected).ToList();
+        var selected = Items.Where(i => i.IsSelected && !i.IsAction).ToList();
         if (selected.Count == 0)
         {
             _main.StatusMessage = "Nada selecionado";
             return;
         }
 
-        await _main.RequireRestorePointAsync("Project Boost X - Gaming");
+        await _main.RequireRestorePointAsync("Project Boost X - Otimizações");
 
-        int ok = 0;
+        var ok = 0;
         foreach (var item in selected)
         {
             _main.StatusMessage = $"Aplicando: {item.Name}";
-            try
-            {
-                item.State = await OptimizationCatalog.ApplyAsync(item);
-                if (item.State == ApplyState.Applied)
-                {
-                    OptimizationStateStore.MarkMany([item.Id]);
-                    ok++;
-                    item.IsSelected = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                item.State = ApplyState.Failed;
-                item.StatusMessage = ex.Message;
-            }
+            if (await OptimizationEngine.ApplyAsync(item) != ApplyState.Applied) continue;
+            ok++;
+            item.IsSelected = false;
         }
 
-        _main.StatusMessage = $"{ok}/{selected.Count} otimizações de jogo aplicadas · {selected.Count - ok} falhas";
+        _main.StatusMessage = $"{ok}/{selected.Count} otimizações aplicadas · {selected.Count - ok} falhas";
     });
 
     [RelayCommand]
-    private void ToggleSelectAll()
+    private Task ApplyItemAsync(OptimizationItem? item) => _main.RunOperationAsync("Aplicando…", async () =>
     {
-        // Seleciona só o que ainda não foi aplicado
-        foreach (var i in Items)
-            i.IsSelected = SelectAll && i.State != ApplyState.Applied;
-    }
+        if (item is null) return;
+        if (!item.IsAction) await _main.RequireRestorePointAsync($"Project Boost X - {item.Name}");
+        var state = await OptimizationEngine.ApplyAsync(item);
+        item.IsSelected = false;
+        _main.StatusMessage = state == ApplyState.Failed
+            ? $"{item.Name}: {item.StatusMessage}"
+            : item.IsAction ? $"{item.Name}: concluído" : $"{item.Name}: aplicado";
+    });
+
+    [RelayCommand]
+    private Task RevertItemAsync(OptimizationItem? item) => _main.RunOperationAsync("Revertendo…", async () =>
+    {
+        if (item is null) return;
+        var ok = await OptimizationEngine.RevertAsync(item);
+        _main.StatusMessage = ok ? $"{item.Name}: revertido" : $"{item.Name}: {item.StatusMessage}";
+    });
 }
 
 public partial class CleanupViewModel : ObservableObject

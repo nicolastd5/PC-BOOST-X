@@ -50,7 +50,7 @@
                 <StackPanel Margin="0,6,0,0">
                     <RadioButton Style="{StaticResource NavButton}" Content="◈  Dashboard" IsChecked="True"
                                  GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Dashboard" />
-                    <RadioButton Style="{StaticResource NavButton}" Content="⚡  Boost de jogo"
+                    <RadioButton Style="{StaticResource NavButton}" Content="⚡  Otimizações"
                                  GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="Gaming" />
                     <RadioButton Style="{StaticResource NavButton}" Content="🎮  Perfis por jogo"
                                  GroupName="Nav" Command="{Binding NavigateCommand}" CommandParameter="GameProfiles" />
@@ -173,14 +173,14 @@
 
                                 <!-- Gaming optimizations -->
                                 <StackPanel Visibility="{Binding CurrentPage, Converter={StaticResource PageToVis}, ConverterParameter=Gaming}">
-                                    <TextBlock Text="Boost de jogo" Style="{StaticResource TitleText}" />
+                                    <TextBlock Text="Otimizações" Style="{StaticResource TitleText}" />
                                     <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,16"
-                                               Text="Plano de energia, Game Mode, tela cheia, input, rede e telemetria. Não mexe em anti-cheat. O que já está Aplicado sai da seleção." />
+                                               Text="Todos os ajustes do catálogo. Cada um pode ser aplicado e revertido sozinho. Itens de risco Moderado e Avançado só entram se você marcar." />
 
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <CheckBox Content="Selecionar pendentes" IsChecked="{Binding Gaming.SelectAll}"
+                                                <CheckBox Content="Selecionar recomendadas (risco Seguro)" IsChecked="{Binding Gaming.SelectAll}"
                                                           Command="{Binding Gaming.ToggleSelectAllCommand}" />
                                             </StackPanel>
                                             <CheckBox Content="Exigir ponto de restauração (opção compartilhada entre abas)"
@@ -200,6 +200,40 @@
                                                                 <StackPanel Grid.Column="1">
                                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
                                                                     <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12" />
+                                                                    <TextBlock Text="{Binding Caution}" FontSize="11" Foreground="{StaticResource WarningBrush}" Margin="0,4,0,0">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding Caution}" Value="">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <TextBlock FontSize="11" Foreground="{StaticResource DangerBrush}" Margin="0,4,0,0">
+                                                                        <Run Text="Não recomendado para este PC: " /><Run Text="{Binding NotRecommendedReason, Mode=OneWay}" />
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding NotRecommendedReason}" Value="{x:Null}">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding StatusMessage}" Value="{x:Null}">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
                                                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                                                         <Border Style="{StaticResource Chip}">
                                                                             <TextBlock FontSize="11" Foreground="{StaticResource AccentBrush}">
@@ -207,19 +241,82 @@
                                                                             </TextBlock>
                                                                         </Border>
                                                                         <Border Style="{StaticResource Chip}">
-                                                                            <TextBlock FontSize="11" Foreground="{StaticResource WarningBrush}">
+                                                                            <TextBlock FontSize="11">
                                                                                 <Run Text="Risco: " /><Run Text="{Binding RiskDisplay, Mode=OneWay}" />
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Risk}" Value="Moderate">
+                                                                                                <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Risk}" Value="Advanced">
+                                                                                                <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
                                                                             </TextBlock>
                                                                         </Border>
                                                                         <Border Style="{StaticResource Chip}">
-                                                                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}">
-                                                                                <Run Text="{Binding CategoryDisplay, Mode=OneWay}" />
-                                                                            </TextBlock>
+                                                                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" Text="{Binding CategoryDisplay}" />
+                                                                        </Border>
+                                                                        <Border Style="{StaticResource Chip}" Visibility="{Binding RequiresRestart, Converter={StaticResource BoolToVis}}">
+                                                                            <TextBlock FontSize="11" Foreground="{StaticResource Accent2Brush}" Text="Requer reinício" />
                                                                         </Border>
                                                                     </StackPanel>
                                                                 </StackPanel>
-                                                                <TextBlock Grid.Column="2" Text="{Binding StateDisplay}" VerticalAlignment="Center"
-                                                                           Foreground="{StaticResource AccentBrush}" FontSize="12" FontWeight="SemiBold" />
+                                                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                                    <TextBlock Text="{Binding StateDisplay}" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
+                                                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                                                                        <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding IsAction}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <Button Margin="0,6,0,0"
+                                                                            Command="{Binding DataContext.Gaming.ApplyItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <Button.Style>
+                                                                            <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                                                                <Setter Property="Content" Value="Aplicar" />
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsAction}" Value="True">
+                                                                                        <Setter Property="Content" Value="Executar" />
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Button.Style>
+                                                                    </Button>
+                                                                    <Button Content="Reverter" Margin="0,6,0,0"
+                                                                            Command="{Binding DataContext.Gaming.RevertItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <Button.Style>
+                                                                            <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding State}" Value="Applied">
+                                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Button.Style>
+                                                                    </Button>
+                                                                </StackPanel>
                                                             </Grid>
                                                         </Border>
                                                     </DataTemplate>
