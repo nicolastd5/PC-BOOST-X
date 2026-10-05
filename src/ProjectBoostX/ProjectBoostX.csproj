@@ -11,11 +11,22 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ProjectBoostX</AssemblyName>
     <RootNamespace>BoostParaPc</RootNamespace>
-    <Version>2.1.0</Version>
+    <Version>3.0.0</Version>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <Product>Project Boost X</Product>
     <AssemblyTitle>Project Boost X</AssemblyTitle>
     <Description>Otimizador de PC para jogos e tarefas — Project Boost X</Description>
     <Company>Project Boost X</Company>
+  </PropertyGroup>
+
+  <!-- Publicação: um único .exe que não exige .NET instalado. WPF não suporta trimming; não usar PublishTrimmed. -->
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
