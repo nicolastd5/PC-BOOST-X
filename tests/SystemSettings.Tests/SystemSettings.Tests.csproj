@@ -5,8 +5,9 @@
     <NoWarn>$(NoWarn);CS0436;CA1416</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Shared/RegistryFixture.cs" Link="RegistryFixture.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/PowerPlanService.cs" Link="PowerPlanService.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/SystemSettingsBackupService.cs" Link="SystemSettingsBackupService.cs" Condition="Exists('../../src/ProjectBoostX/Services/SystemSettingsBackupService.cs')" />
-    <Compile Include="../GameProfiles.Tests/TestDependencies.cs" Link="RegistryFixture.cs" />
+    <Compile Include="../GameProfiles.Tests/TestDependencies.cs" Link="TestDependencies.cs" />
   </ItemGroup>
 </Project>
