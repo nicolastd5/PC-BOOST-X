@@ -58,44 +58,6 @@ public static class SystemInfoService
             ComputerName: Environment.MachineName);
     }
 
-    public static string GetCurrentPowerPlan()
-    {
-        try
-        {
-            var result = ProcessRunner.RunAsync("powercfg", "/getactivescheme", timeoutMs: 5_000)
-                .GetAwaiter().GetResult();
-            // Example: "Plano de energia ativo GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Equilibrado)"
-            var line = result.StdOut.Trim();
-            var start = line.IndexOf('(');
-            var end = line.IndexOf(')');
-            if (start >= 0 && end > start)
-                return line[(start + 1)..end];
-            return line.Length > 0 ? line : "Desconhecido";
-        }
-        catch
-        {
-            return "Desconhecido";
-        }
-    }
-
-    public static async Task<string> GetCurrentPowerPlanAsync()
-    {
-        try
-        {
-            var result = await ProcessRunner.RunAsync("powercfg", "/getactivescheme", timeoutMs: 5_000).ConfigureAwait(false);
-            var line = result.StdOut.Trim();
-            var start = line.IndexOf('(');
-            var end = line.IndexOf(')');
-            if (start >= 0 && end > start)
-                return line[(start + 1)..end];
-            return line.Length > 0 ? line : "Desconhecido";
-        }
-        catch
-        {
-            return "Desconhecido";
-        }
-    }
-
     private static string GetCpuName()
     {
         try
@@ -165,19 +127,7 @@ public static class SystemInfoService
             var total = Math.Round(drive.TotalSize / (1024.0 * 1024.0 * 1024.0), 1);
             var free = Math.Round(drive.TotalFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
 
-            var type = "Desconhecido";
-            try
-            {
-                using var searcher = new ManagementObjectSearcher(
-                    "SELECT Model, MediaType FROM Win32_DiskDrive WHERE InterfaceType != 'USB'");
-                foreach (var obj in searcher.Get())
-                {
-                    var media = obj["MediaType"]?.ToString() ?? "";
-                    type = media.Contains("SSD", StringComparison.OrdinalIgnoreCase) ? "SSD" : "HD";
-                    break;
-                }
-            }
-            catch { type = "Desconhecido"; }
+            var type = GetSystemDiskType(drive.Name[0]);
 
             return (type, total, free);
         }
@@ -185,6 +135,40 @@ public static class SystemInfoService
         {
             return ("Desconhecido", 0, 0);
         }
+    }
+
+    /// <summary>
+    /// Tipo do disco físico que contém a unidade. Win32_DiskDrive.MediaType devolve
+    /// "Fixed hard disk media" também para SSD; a fonte correta é MSFT_PhysicalDisk.
+    /// </summary>
+    private static string GetSystemDiskType(char driveLetter)
+    {
+        try
+        {
+            var scope = new ManagementScope(@"\\.\root\Microsoft\Windows\Storage");
+            uint? diskNumber = null;
+            using (var partitions = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT DiskNumber, DriveLetter FROM MSFT_Partition")))
+            {
+                foreach (var partition in partitions.Get())
+                {
+                    if (partition["DriveLetter"] is char letter && char.ToUpperInvariant(letter) == char.ToUpperInvariant(driveLetter))
+                    {
+                        diskNumber = Convert.ToUInt32(partition["DiskNumber"]);
+                        break;
+                    }
+                }
+            }
+            if (diskNumber is null) return "Desconhecido";
+
+            using var disks = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT DeviceId, MediaType FROM MSFT_PhysicalDisk"));
+            foreach (var disk in disks.Get())
+            {
+                if (disk["DeviceId"]?.ToString() != diskNumber.Value.ToString()) continue;
+                return Convert.ToUInt16(disk["MediaType"]) switch { 4 => "SSD", 3 => "HD", _ => "Desconhecido" };
+            }
+        }
+        catch { /* espaços de armazenamento, RAID ou WMI indisponível */ }
+        return "Desconhecido";
     }
 
     private static bool DetectLaptop()
