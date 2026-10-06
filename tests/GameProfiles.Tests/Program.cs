@@ -7,6 +7,10 @@ const string Layers = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFl
 const string Gpu = @"Software\Microsoft\DirectX\UserGpuPreferences";
 const string Ifeo = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\game.exe";
 const string Perf = Ifeo + @"\PerfOptions";
+const string UnrealSample = "[/Script/Engine.GameUserSettings]\r\nbUseVSync=False\r\nResolutionSizeX=1920\r\n\r\n" +
+    "[ScalabilityGroups]\r\nsg.ResolutionQuality=100.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=3\r\n" +
+    "sg.EffectsQuality=0\r\nsg.PostProcessQuality=2\r\nsg.TextureQuality=3\r\n\r\n" +
+    "[ShaderPipelineCache.CacheFile]\r\nsg.ShadowQuality=3\r\nLastOpened=Game\r\n";
 
 var cases = new (string Name, Action<GameProfile> Test)[]
 {
@@ -176,6 +180,92 @@ var cases = new (string Name, Action<GameProfile> Test)[]
         Equal(0, RegistryKey.WriteCount);
         Require(game.Status != "—", "Missing executable failure was not exposed.");
     }),
+    ("Unreal: o preset leve só baixa o que está acima do alvo e preserva o resto do arquivo", _ =>
+    {
+        var (text, changes) = UnrealIni.ApplyLightPreset(UnrealSample);
+        Equal(UnrealSample
+            .Replace("sg.ResolutionQuality=100.000000", "sg.ResolutionQuality=80.000000")
+            .Replace("[ScalabilityGroups]\r\nsg.ResolutionQuality=80.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=3",
+                     "[ScalabilityGroups]\r\nsg.ResolutionQuality=80.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=1")
+            .Replace("sg.PostProcessQuality=2", "sg.PostProcessQuality=1"), text);
+        Equal("sg.ResolutionQuality,sg.ShadowQuality,sg.PostProcessQuality", string.Join(",", changes.Select(c => c.Key)));
+        Equal(UnrealSample, UnrealIni.Restore(text, changes));
+    }),
+    ("Unreal: resolução automática, valores já baixos e arquivo sem a seção padrão não mudam", _ =>
+    {
+        var low = "[ScalabilityGroups]\nsg.ResolutionQuality=0\nsg.ShadowQuality=1\nsg.EffectsQuality=0\nsg.ReflectionQuality=auto\n";
+        var (text, changes) = UnrealIni.ApplyLightPreset(low);
+        Equal(low, text); Equal(0, changes.Count);
+        var custom = "[/Script/FortniteGame.FortGameUserSettings]\nsg.ShadowQuality=3\n";
+        Equal(custom, UnrealIni.ApplyLightPreset(custom).Text);
+    }),
+    ("Unreal: desfazer não sobrescreve o que o jogador mudou depois no jogo", _ =>
+    {
+        var (text, changes) = UnrealIni.ApplyLightPreset(UnrealSample);
+        var edited = text.Replace("[ScalabilityGroups]\r\nsg.ResolutionQuality=80.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=1",
+                                  "[ScalabilityGroups]\r\nsg.ResolutionQuality=80.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=2");
+        var restored = UnrealIni.Restore(edited, changes);
+        Require(restored.Contains("sg.ShadowQuality=2\r\nsg.EffectsQuality"), "A escolha feita depois pelo jogador foi sobrescrita.");
+        Require(restored.Contains("sg.ResolutionQuality=100.000000") && restored.Contains("sg.PostProcessQuality=2"), "Os demais valores não voltaram.");
+    }),
+    ("Unreal: aplica e desfaz no arquivo do jogo, preservando a codificação", game =>
+    {
+        var config = UnrealLayout(game, UnrealSample, new System.Text.UnicodeEncoding(false, true));
+        var original = File.ReadAllBytes(config);
+        Require(UnrealBoostService.IsUnrealGame(game.ExecutablePath), "Jogo Unreal não foi reconhecido.");
+        Equal(config, UnrealBoostService.FindConfig(game.ExecutablePath, game.Name));
+        UnrealBoostService.Apply(game.ExecutablePath, game.Name);
+        var bytes = File.ReadAllBytes(config);
+        Require(bytes[0] == 0xFF && bytes[1] == 0xFE, "A codificação UTF-16 do arquivo foi perdida.");
+        Require(System.Text.Encoding.Unicode.GetString(bytes).Contains("sg.ShadowQuality=1"), "O preset não foi gravado.");
+        Require(UnrealBoostService.IsBoosted(game.ExecutablePath), "O jogo não ficou marcado como alterado.");
+        Require(UnrealBoostService.Revert(game.ExecutablePath), "Não havia o que desfazer.");
+        Require(original.SequenceEqual(File.ReadAllBytes(config)), "O arquivo não voltou a ser idêntico ao original.");
+        Require(!UnrealBoostService.IsBoosted(game.ExecutablePath), "O jogo continua marcado depois de desfazer.");
+    }),
+    ("Unreal: aplicar duas vezes mantém os valores originais para desfazer", game =>
+    {
+        var config = UnrealLayout(game, UnrealSample);
+        UnrealBoostService.Apply(game.ExecutablePath, game.Name);
+        File.WriteAllText(config, File.ReadAllText(config).Replace("sg.EffectsQuality=0", "sg.EffectsQuality=3"));
+        UnrealBoostService.Apply(game.ExecutablePath, game.Name);
+        Require(File.ReadAllText(config).Contains("sg.EffectsQuality=1"), "A segunda aplicação não baixou o valor novo.");
+        UnrealBoostService.Revert(game.ExecutablePath);
+        var text = File.ReadAllText(config);
+        Require(text.Contains("sg.ShadowQuality=3") && text.Contains("sg.ResolutionQuality=100.000000"), "Os originais da primeira aplicação foram perdidos.");
+        Require(text.Contains("sg.EffectsQuality=3"), "O valor da segunda aplicação não voltou.");
+    }),
+    ("Unreal: jogo aberto ou arquivo somente leitura não é alterado", game =>
+    {
+        var config = UnrealLayout(game, UnrealSample);
+        var original = File.ReadAllText(config);
+        UnrealBoostService.IsRunning = (_, _) => true;
+        Throws(() => UnrealBoostService.Apply(game.ExecutablePath, game.Name));
+        UnrealBoostService.IsRunning = (_, _) => false;
+        File.SetAttributes(config, FileAttributes.ReadOnly);
+        try { Throws(() => UnrealBoostService.Apply(game.ExecutablePath, game.Name)); }
+        finally { File.SetAttributes(config, FileAttributes.Normal); }
+        Equal(original, File.ReadAllText(config));
+        Require(!UnrealBoostService.IsBoosted(game.ExecutablePath), "Uma tentativa recusada deixou o jogo marcado.");
+    }),
+    ("Unreal: jogo de outro motor não é reconhecido e configuração ausente tem mensagem clara", game =>
+    {
+        UnrealBoostService.LocalAppData = Path.Combine(AppPaths.DataDir, "local");
+        UnrealBoostService.IsRunning = (_, _) => false;
+        Require(!UnrealBoostService.IsUnrealGame(game.ExecutablePath), "Jogo sem a pasta Engine foi tratado como Unreal.");
+        Directory.CreateDirectory(Path.Combine(AppPaths.DataDir, "Engine", "Binaries"));
+        try { UnrealBoostService.Apply(game.ExecutablePath, game.Name); throw new Exception("Aplicou sem arquivo de configuração."); }
+        catch (InvalidOperationException e) { Require(e.Message.Contains("Abra o jogo"), "Mensagem não orienta o jogador: " + e.Message); }
+        Require(!UnrealBoostService.Revert(game.ExecutablePath), "Desfazer sem nada aplicado relatou sucesso.");
+    }),
+    ("Unreal: reverter tudo desfaz todos os jogos alterados", game =>
+    {
+        var config = UnrealLayout(game, UnrealSample);
+        UnrealBoostService.Apply(game.ExecutablePath, game.Name);
+        Equal(1, UnrealBoostService.RevertAll());
+        Equal(UnrealSample, File.ReadAllText(config));
+        Equal(0, UnrealBoostService.RevertAll());
+    }),
 };
 
 var testRoot = Path.Combine(Path.GetTempPath(), "BoostGameProfileTests", Guid.NewGuid().ToString("N"));
@@ -194,6 +284,21 @@ for (var i = 0; i < cases.Length; i++)
 }
 Console.WriteLine($"{cases.Length - failed}/{cases.Length} passed; registry operations ran in memory only.");
 Environment.ExitCode = failed == 0 ? 0 : 1;
+
+// Jogo Unreal de mentira: pasta Engine ao lado do projeto e a configuração em um %LOCALAPPDATA% próprio do teste.
+static string UnrealLayout(GameProfile game, string ini, System.Text.Encoding? encoding = null)
+{
+    var root = Path.GetDirectoryName(game.ExecutablePath)!;
+    Directory.CreateDirectory(Path.Combine(root, "Engine", "Binaries"));
+    Directory.CreateDirectory(Path.Combine(root, "MyGame", "Binaries", "Win64"));
+    UnrealBoostService.LocalAppData = Path.Combine(root, "local");
+    UnrealBoostService.IsRunning = (_, _) => false;
+    var config = Path.Combine(UnrealBoostService.LocalAppData, "MyGame", "Saved", "Config", "Windows", "GameUserSettings.ini");
+    Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+    encoding ??= new System.Text.UTF8Encoding(false);
+    File.WriteAllBytes(config, [.. encoding.GetPreamble(), .. encoding.GetBytes(ini)]);
+    return config;
+}
 
 static object? Read(RegistryKey root, string path, string name)
 {

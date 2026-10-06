@@ -46,6 +46,12 @@ public partial class GameProfile : ObservableObject
     [ObservableProperty]
     private bool _isDetailOpen;
 
+    /// <summary>Jogo em Unreal Engine: pode receber o preset gráfico leve.</summary>
+    public bool IsUnrealEngine { get; set; }
+
+    [ObservableProperty]
+    private bool _isUnrealBoosted;
+
     public string FileName => Path.GetFileName(ExecutablePath);
 
     public void LoadRecommendationInfo()

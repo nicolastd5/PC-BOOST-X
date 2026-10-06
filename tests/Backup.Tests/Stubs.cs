@@ -67,5 +67,6 @@ namespace BoostParaPc.Services
         }
     }
     public static class StartupService { public static Task RevertAllAsync() => Task.CompletedTask; }
+    public static class UnrealBoostService { public static int RevertAll() => 0; }
     public static class SystemSettingsBackupService { public static Task RevertAllAsync() => Task.CompletedTask; }
 }

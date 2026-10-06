@@ -6,8 +6,8 @@ namespace BoostParaPc.Services;
 /// <summary>Verifica se há versão nova no GitHub. Só avisa e dá o link; nunca baixa nem instala.</summary>
 public static class UpdateService
 {
-    // ponytail: repositório ainda não existe. Preencha "dono/repo" quando for publicado; vazio = verificação desligada.
-    public const string Repository = "";
+    // Vazio desliga a verificação.
+    public const string Repository = "nicolastd5/PC-BOOST-X";
 
     public sealed record Update(string Version, string Url);
 

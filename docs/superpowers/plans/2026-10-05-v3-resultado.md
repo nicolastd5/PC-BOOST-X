@@ -32,9 +32,14 @@ Testado no Windows 11 com `ThemeMode="Dark"` em `App.xaml` (`WPF0001` suprimido)
 - **Escala de DPI 125%/150% e Narrador**: não conferidos. Janela em 960×620 conferida visualmente.
 - Tempo de abertura medido no log: ~1 s (4,3 s na primeira execução do `.exe` único, que se extrai sozinho).
 
+## Acréscimos de 06/10/2026
+
+- **Repositório e licença**: `UpdateService.Repository` = `nicolastd5/PC-BOOST-X`; `LICENSE` MIT (o mesmo arquivo criado no GitHub). A verificação de atualização só encontra algo depois da primeira release com tag `vX.Y.Z`.
+- **Alto desempenho da GPU (NVIDIA)** (`gpu.maxperformance`, catálogo com 46 itens): grava "Preferir desempenho máximo" no perfil global do driver pela NVAPI (`Services/Native/NvidiaNative.cs`), com o modo anterior no journal. A **leitura** foi conferida no driver real desta máquina (RTX 2060 SUPER; o modo já estava em 1). A **gravação e a reversão** no driver real não foram exercitadas; só com o driver em memória dos testes.
+- **Preset leve para Unreal Engine** (tela Jogos): baixa para Médio sombras, efeitos, pós-processamento, iluminação, reflexos, folhagem e shading, e limita a resolução de renderização a 80%, na seção `[ScalabilityGroups]` do `GameUserSettings.ini`. Só reduz chaves que já existem; desfazer devolve os valores anteriores, exceto os que o jogador mudou depois. A **detecção** foi conferida nos jogos reais (Deadside, Fortnite, WARDOGS: configuração encontrada nos três). A **gravação** em arquivo de jogo real não foi exercitada; só em arquivos de teste. Jogos com menu gráfico próprio podem ignorar parte das chaves.
+
 ## Pendências do usuário
 
-- Escolher a **licença** (`LICENSE`): a escolha é sua; o README diz que ainda não foi feita.
-- Criar o **repositório no GitHub** e preencher `UpdateService.Repository` (`"dono/repo"`) para ligar a verificação de atualização.
+- Publicar a primeira **release** no GitHub (tag `v3.0.0`, com o `ProjectBoostX.exe`) para o aviso de atualização e o link do README funcionarem.
 - Conferência manual com administrador (UAC): aplicar/reverter itens, Modo Jogo com um jogo real, DNS, TRIM, antes/depois depois de reiniciar.
 - Verificação final em Windows 10 e em instalação limpa (Tarefa 4.6).

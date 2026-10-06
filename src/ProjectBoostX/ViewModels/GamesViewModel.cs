@@ -48,7 +48,16 @@ public partial class GamesViewModel : ObservableObject, IScreen
         {
             Games.Clear();
             SelectedGame = null;
-            var list = await Task.Run(() => GameProfileService.DetectGames());
+            var list = await Task.Run(() =>
+            {
+                var games = GameProfileService.DetectGames();
+                foreach (var g in games)
+                {
+                    g.IsUnrealEngine = UnrealBoostService.IsUnrealGame(g.ExecutablePath);
+                    g.IsUnrealBoosted = UnrealBoostService.IsBoosted(g.ExecutablePath);
+                }
+                return games;
+            });
             foreach (var g in list)
             {
                 g.LoadRecommendationInfo();
@@ -113,9 +122,43 @@ public partial class GamesViewModel : ObservableObject, IScreen
         if (g is null) return;
         _main.StatusMessage = $"Revertendo {g.Name}…";
         await Task.Run(() => GameProfileService.RevertProfile(g));
+        if (g.IsUnrealBoosted) await SetUnrealBoostAsync(g, apply: false);
         LastResult = $"{g.Name} revertido";
         _main.StatusMessage = LastResult;
     });
+
+    /// <summary>Preset gráfico leve para jogos em Unreal Engine. Edita só o arquivo de opções do jogo; não precisa de ponto de restauração.</summary>
+    [RelayCommand]
+    private Task ApplyUnrealBoostAsync() => RunUnrealBoostAsync(apply: true);
+
+    [RelayCommand]
+    private Task RevertUnrealBoostAsync() => RunUnrealBoostAsync(apply: false);
+
+    private Task RunUnrealBoostAsync(bool apply) => _main.RunOperationAsync(
+        apply ? "Aplicando preset leve…" : "Desfazendo preset leve…", async () =>
+    {
+        if (SelectedGame is not { } g) return;
+        LastResult = $"{g.Name}: {await SetUnrealBoostAsync(g, apply)}";
+        _main.StatusMessage = LastResult;
+    });
+
+    private static async Task<string> SetUnrealBoostAsync(GameProfile g, bool apply)
+    {
+        try
+        {
+            var summary = await Task.Run(() => apply
+                ? UnrealBoostService.Apply(g.ExecutablePath, g.Name)
+                : UnrealBoostService.Revert(g.ExecutablePath) ? "preset leve desfeito" : "não havia preset leve aplicado");
+            ActionLog.Write("jogo.unreal", apply ? "aplicar" : "reverter", true, $"{g.Name}: {summary}");
+            return summary;
+        }
+        catch (Exception ex)
+        {
+            ActionLog.Write("jogo.unreal", apply ? "aplicar" : "reverter", false, $"{g.Name}: {ex.Message}");
+            throw;
+        }
+        finally { g.IsUnrealBoosted = UnrealBoostService.IsBoosted(g.ExecutablePath); }
+    }
 
     [RelayCommand]
     private Task ApplyRecommendedSelectedAsync() => RunProfilesAsync(revert: false);

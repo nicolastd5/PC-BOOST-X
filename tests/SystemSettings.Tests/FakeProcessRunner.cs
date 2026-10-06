@@ -39,6 +39,7 @@ public static class ProcessRunner
         Tcp.Clear(); Tcp["Internet"] = "Restricted"; Tcp["InternetCustom"] = "Disabled";
         Tasks.Clear(); Tasks["Consolidator"] = true; Tasks["UsbCeip"] = false;
         DnsServers = ["192.168.0.1"]; DnsStatic = false;
+        NvidiaNative.Reset();
         ServiceRunning = true; FailContains = null; InvalidPowerQuery = false; InvalidServiceRead = false;
         LocalizedPowerQuery = false;
         BeforeMutation = null; Mutations.Clear(); DuplicateTemplates.Clear();
@@ -164,4 +165,18 @@ public static class PowerNative
         !ProcessRunner.InvalidPowerQuery && ProcessRunner.Values.TryGetValue(subgroup + " " + setting, out var value)
             ? value
             : null;
+}
+
+// Substitui o driver NVIDIA: modo de energia global em memória (5 = padrão do driver).
+public static class NvidiaNative
+{
+    public const uint MaxPowerMode = 5;
+    public static bool Present { get; set; }
+    public static uint Value { get; set; }
+    public static bool UserSet { get; set; }
+
+    public static void Reset() { Present = true; Value = 5; UserSet = false; }
+    public static (uint Value, bool UserSet)? GetPowerMode() => Present ? (Value, UserSet) : null;
+    public static void SetPowerMode(uint value) { Value = value; UserSet = true; }
+    public static void ClearPowerMode() { Value = 5; UserSet = false; }
 }

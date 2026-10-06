@@ -62,6 +62,16 @@ public static partial class OptimizationCatalog
         },
         new()
         {
+            Id = "gpu.maxperformance", Name = "Alto desempenho da GPU (NVIDIA)",
+            Description = "Muda no driver o modo de gerenciamento de energia para \"Preferir desempenho máximo\": a placa deixa de reduzir a frequência em cenas leves.",
+            Category = OptimizationCategory.Gaming, Risk = RiskLevel.Moderate, Impact = "Menos quedas de quadros; não aumenta o FPS máximo",
+            Caution = "Mais consumo, calor e ruído, inclusive com o PC parado.",
+            NotRecommended = pc => NvidiaNative.IsAvailable ? Laptop(pc) : "Disponível só para placas NVIDIA.",
+            ApplyExtra = owner => SystemSettingsBackupService.SetNvidiaPowerModeAsync(NvidiaNative.PreferMaxPerformance, owner),
+            IsAppliedExtra = () => NvidiaNative.GetPowerMode()?.Value == NvidiaNative.PreferMaxPerformance
+        },
+        new()
+        {
             Id = "game.mmprofile", Name = "Rede e multimídia sem limitação",
             Description = "Remove o limite de pacotes de rede durante reprodução de mídia e reserva o mínimo de CPU para tarefas de fundo.",
             Category = OptimizationCategory.Gaming, Risk = RiskLevel.Moderate, Impact = "Rede sem estrangulamento com áudio/vídeo tocando",

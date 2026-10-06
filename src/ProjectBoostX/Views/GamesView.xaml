@@ -107,6 +107,31 @@
                         </StackPanel>
                     </Expander>
 
+                    <!-- Só para jogos em Unreal Engine -->
+                    <StackPanel Margin="0,14,0,0" Visibility="{Binding IsUnrealEngine, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Unreal Engine: preset gráfico leve" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource MutedText}" Margin="0,4,0,0"
+                                   Text="Baixa para Médio sombras, efeitos, pós-processamento, iluminação, reflexos e folhagem, e limita a resolução de renderização a 80%. Mais FPS em troca de imagem mais simples." />
+                        <TextBlock FontSize="11" Foreground="{StaticResource WarningBrush}" Margin="0,4,0,0"
+                                   Text="Não use se você já ajustou os gráficos no jogo ou prefere qualidade visual. Feche o jogo antes." />
+                        <Button Margin="0,8,0,0"
+                                Command="{Binding DataContext.ApplyUnrealBoostCommand, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Setter Property="Content" Value="Aplicar preset leve" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUnrealBoosted}" Value="True">
+                                            <Setter Property="Content" Value="Reaplicar preset leve" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="Desfazer preset leve" Style="{StaticResource DangerButton}" Margin="0,8,0,0"
+                                Visibility="{Binding IsUnrealBoosted, Converter={StaticResource BoolToVis}}"
+                                Command="{Binding DataContext.RevertUnrealBoostCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </StackPanel>
+
                     <Button Content="Reverter este jogo" Style="{StaticResource DangerButton}" Margin="0,10,0,0"
                             Command="{Binding DataContext.RevertForSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                 </StackPanel>

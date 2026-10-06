@@ -22,7 +22,7 @@ public static class SystemSettingsBackupService
     private sealed record Journal(string Version, DateTime CreatedUtc, string Kind,
         PowerValueState? PowerValue = null, PlanState? Plan = null, ServiceState? Service = null,
         HibernationState? Hibernation = null, TcpState? Tcp = null, TasksState? Tasks = null,
-        string? Owner = null, TaskState? Task = null, DnsState? Dns = null);
+        string? Owner = null, TaskState? Task = null, DnsState? Dns = null, NvidiaState? Nvidia = null);
     private sealed record PowerValueState(string Plan, string Subgroup, string Setting, uint Ac, uint Dc);
     private sealed record PlanState(string OriginalPlan, string TargetPlan, string? CreatedPlan);
     private sealed record ServiceState(string Name, int Start, int? DelayedAutoStart, bool Running);
@@ -31,6 +31,8 @@ public static class SystemSettingsBackupService
     private sealed record TasksState(Dictionary<string, bool> Enabled);
     private sealed record DnsState(int InterfaceIndex, string[] Servers, bool Static);
     private sealed record TaskState(string Path, string Name, bool Enabled);
+    /// <summary><c>Previous</c> nulo: o modo não tinha sido escolhido pelo usuário (valia o padrão do driver).</summary>
+    private sealed record NvidiaState(uint? Previous);
 
     private static string JournalDir => Path.Combine(AppPaths.BackupDir, "commands");
 
@@ -194,6 +196,18 @@ public static class SystemSettingsBackupService
             timeoutMs: 15_000, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Modo de gerenciamento de energia global do driver NVIDIA. O journal guarda o modo anterior ou "padrão do driver".</summary>
+    public static Task SetNvidiaPowerModeAsync(uint mode, string? owner = null)
+    {
+        var current = NvidiaNative.GetPowerMode()
+            ?? throw new InvalidOperationException("Nenhum driver NVIDIA foi encontrado neste PC.");
+        if (current.UserSet && current.Value == mode) return Task.CompletedTask;
+        WriteJournal(new Journal(JournalVersion, DateTime.UtcNow, "Nvidia",
+            Nvidia: new(current.UserSet ? current.Value : null), Owner: owner));
+        NvidiaNative.SetPowerMode(mode);
+        return Task.CompletedTask;
+    }
+
     public static Task RevertAllAsync() => RevertAsync(null);
 
     /// <summary>Reverte os journals pendentes do dono informado; <c>null</c> reverte todos.</summary>
@@ -302,6 +316,14 @@ public static class SystemSettingsBackupService
                     ? $"Set-DnsClientServerAddress -InterfaceIndex {s.InterfaceIndex} -ServerAddresses {string.Join(",", s.Servers)}"
                     : $"Set-DnsClientServerAddress -InterfaceIndex {s.InterfaceIndex} -ResetServerAddresses";
                 await ProcessRunner.RunPowerShellAsync(script, 15_000, ct).ConfigureAwait(false);
+                break;
+            }
+            case "Nvidia":
+            {
+                var s = journal.Nvidia ?? throw new InvalidDataException("Journal da NVIDIA incompleto.");
+                if (s.Previous is > NvidiaNative.MaxPowerMode) throw new InvalidDataException("Modo de energia da NVIDIA inválido.");
+                if (s.Previous is uint previous) NvidiaNative.SetPowerMode(previous);
+                else NvidiaNative.ClearPowerMode();
                 break;
             }
             default: throw new InvalidDataException($"Tipo de journal desconhecido: {journal.Kind}");

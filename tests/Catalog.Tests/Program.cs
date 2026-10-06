@@ -194,10 +194,10 @@ foreach (var item in OptimizationCatalog.All.Where(i => !i.IsAction))
 
 cases.AddRange(
 [
-    ("Catálogo tem 45 itens com id único e bem formado", () =>
+    ("Catálogo tem 46 itens com id único e bem formado", () =>
     {
-        Equal(45, OptimizationCatalog.All.Count);
-        Equal(45, OptimizationCatalog.All.Select(i => i.Id).Distinct().Count());
+        Equal(46, OptimizationCatalog.All.Count);
+        Equal(46, OptimizationCatalog.All.Select(i => i.Id).Distinct().Count());
         var bad = OptimizationCatalog.All.FirstOrDefault(i => !System.Text.RegularExpressions.Regex.IsMatch(i.Id, @"\A[a-z0-9.]+\z"));
         Require(bad is null, $"Id inválido: {bad?.Id}");
         return Task.CompletedTask;
@@ -249,6 +249,25 @@ cases.AddRange(
         Require(sysmain.NotRecommended!(Pc(disk: "HD")) is not null, "HD não bloqueou SysMain.");
         Require(sysmain.NotRecommended!(Pc()) is null, "SSD bloqueou SysMain.");
         return Task.CompletedTask;
+    }),
+    ("Alto desempenho da GPU: só com driver NVIDIA, nunca em notebook, e reverter devolve o modo anterior", async () =>
+    {
+        var gpu = OptimizationCatalog.All.Single(i => i.Id == "gpu.maxperformance");
+        Equal(RiskLevel.Moderate, gpu.Risk);
+        Require(gpu.NotRecommended!(Pc()) is null, "Desktop com NVIDIA foi bloqueado.");
+        Require(gpu.NotRecommended!(Pc(laptop: true)) is not null, "Notebook não bloqueou o modo de desempenho máximo.");
+
+        NvidiaNative.Mode = (0, true);
+        Equal(ApplyState.Applied, await OptimizationEngine.ApplyAsync(gpu));
+        Equal((1u, true), NvidiaNative.Mode);
+        Require(await OptimizationEngine.RevertAsync(gpu), "Reversão falhou.");
+        Equal((0u, true), NvidiaNative.Mode);
+
+        NvidiaNative.Mode = null;
+        Require(gpu.NotRecommended!(Pc())!.Contains("NVIDIA"), "PC sem NVIDIA não explica o motivo.");
+        Require(!OptimizationEngine.IsApplied(gpu), "Sem driver NVIDIA o item aparece como aplicado.");
+        Equal(ApplyState.Failed, await OptimizationEngine.ApplyAsync(gpu));
+        Require(gpu.StatusMessage!.Contains("NVIDIA"), "Falha sem explicação.");
     }),
     ("Serviço que não existe nesta edição do Windows não gera erro", async () =>
     {

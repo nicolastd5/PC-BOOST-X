@@ -4,10 +4,10 @@ Otimizador de Windows 10 e 11 para jogos e uso diário, em português. Cada ajus
 
 ## O que faz
 
-- **Otimizações** — 45 itens (energia, jogos, entrada, visual, privacidade, serviços, rede, sistema), cada um com o que faz, o impacto, o risco e *quando não usar*. Presets "Seguro" e "Equilibrado" só **marcam** os itens; você revisa e aplica. Itens avançados nunca entram em preset.
-- **Adequação ao seu PC** — ajustes contraindicados (core parking em notebook, CPU híbrida ou X3D; SysMain em HD; hibernação em notebook) aparecem marcados como "não recomendado" e ficam fora da seleção automática.
+- **Otimizações** — 46 itens (energia, jogos, entrada, visual, privacidade, serviços, rede, sistema), cada um com o que faz, o impacto, o risco e *quando não usar*. Presets "Seguro" e "Equilibrado" só **marcam** os itens; você revisa e aplica. Itens avançados nunca entram em preset.
+- **Adequação ao seu PC** — ajustes contraindicados (core parking em notebook, CPU híbrida ou X3D; SysMain em HD; hibernação em notebook; modo de desempenho máximo da GPU em notebook ou sem placa NVIDIA) aparecem marcados como "não recomendado" e ficam fora da seleção automática.
 - **Diagnóstico** — nota de saúde e pontos de atenção: taxa de atualização do monitor, RAM em velocidade base ou canal único, driver de vídeo antigo, TRIM, espaço livre, paginação, reinício pendente, jogos em HD e outros.
-- **Jogos** — detecta Steam, Epic, Riot e outros; perfis recomendados por jogo (prioridade, GPU, tela cheia).
+- **Jogos** — detecta Steam, Epic, Riot e outros; perfis recomendados por jogo (prioridade, GPU, tela cheia). Em jogos feitos em Unreal Engine, um **preset gráfico leve** opcional baixa sombras, efeitos e resolução de renderização no arquivo de opções do jogo, e pode ser desfeito.
 - **Modo Jogo automático** (opcional) — enquanto um jogo detectado roda: prioridade alta para ele, apps de fundo em modo de eficiência, notificações silenciadas e memória em espera limpa. Tudo volta ao normal quando o jogo fecha, mesmo que o programa feche no meio.
 - **Limpeza** — temporários, caches de navegadores (todos os perfis), shaders, relatórios de erro, apps e lixeira. Nada de arquivos pessoais.
 - **Inicialização** — programas do Registro, pasta Inicializar e tarefas agendadas de logon, com reativação.
@@ -30,7 +30,7 @@ Otimizador de Windows 10 e 11 para jogos e uso diário, em português. Cada ajus
 
 ## Instalação e requisitos
 
-Baixe o `ProjectBoostX.exe` (arquivo único, não exige .NET instalado) e execute. O programa pede permissão de administrador porque altera configurações do sistema.
+Baixe o `ProjectBoostX.exe` na [página de versões](https://github.com/nicolastd5/PC-BOOST-X/releases/latest) (arquivo único, não exige .NET instalado) e execute. O programa pede permissão de administrador porque altera configurações do sistema.
 
 ### O SmartScreen avisou "O Windows protegeu o computador"
 
@@ -54,4 +54,4 @@ Os testes nunca tocam o Registro, serviços ou processos reais: usam um Registro
 
 ## Licença
 
-A licença ainda não foi escolhida. Enquanto não houver um arquivo `LICENSE`, todos os direitos são reservados ao autor.
+[MIT](LICENSE).

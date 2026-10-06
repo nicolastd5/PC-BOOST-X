@@ -10,5 +10,7 @@
     <Compile Include="../Shared/RegistryFixture.cs" Link="RegistryFixture.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/GameProfileService.cs" Link="GameProfileService.cs" />
     <Compile Include="../../src/ProjectBoostX/Services/RegistryBackupService.cs" Link="RegistryBackupService.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/UnrealIni.cs" Link="UnrealIni.cs" />
+    <Compile Include="../../src/ProjectBoostX/Services/UnrealBoostService.cs" Link="UnrealBoostService.cs" />
   </ItemGroup>
 </Project>

@@ -28,6 +28,8 @@ public static class RevertAllService
             await SystemSettingsBackupService.RevertAllAsync().ConfigureAwait(false);
             await StartupService.RevertAllAsync().ConfigureAwait(false);
             await RevertServiceStartTypesAsync().ConfigureAwait(false);
+            progress?.Report("Desfazendo presets gráficos de jogos…");
+            await Task.Run(UnrealBoostService.RevertAll).ConfigureAwait(false);
             OptimizationStateStore.ClearAll();
             return new(restored, 0, "Reversão concluída. Restaurados apenas os ajustes com backup. Alguns ajustes exigem reiniciar o Windows.");
         }

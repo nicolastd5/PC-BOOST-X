@@ -47,6 +47,15 @@ public static class PowerNative
         Values.TryGetValue(subgroup + " " + setting, out var value) ? value : null;
 }
 
+/// <summary>Driver NVIDIA em memória; <c>null</c> = PC sem driver NVIDIA.</summary>
+public static class NvidiaNative
+{
+    public const uint PreferMaxPerformance = 1;
+    public static (uint Value, bool UserSet)? Mode { get; set; } = (5, false);
+    public static bool IsAvailable => Mode is not null;
+    public static (uint Value, bool UserSet)? GetPowerMode() => Mode;
+}
+
 public static class PowerPlanService
 {
     public static Task<bool> ActivateHighPerformanceAsync(string? owner = null) => Task.FromResult(true);
@@ -62,6 +71,15 @@ public static class SystemSettingsBackupService
         Journal.Clear();
         PowerNative.Values.Clear();
         ProcessRunner.Calls.Clear();
+        NvidiaNative.Mode = (5, false);
+    }
+
+    public static Task SetNvidiaPowerModeAsync(uint mode, string? owner = null)
+    {
+        var previous = NvidiaNative.Mode ?? throw new InvalidOperationException("Nenhum driver NVIDIA foi encontrado neste PC.");
+        Journal.Add((owner, () => NvidiaNative.Mode = previous));
+        NvidiaNative.Mode = (mode, true);
+        return Task.CompletedTask;
     }
 
     public static Task SetPowerValueAsync(string subgroup, string setting, uint value, bool ac = true, string? owner = null)

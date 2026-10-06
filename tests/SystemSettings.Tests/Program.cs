@@ -179,6 +179,44 @@ var cases = new (string Name, Func<Task> Run)[]
         await Call("RevertAllAsync");
         Equal((900u, 300u), ProcessRunner.Values["sub_video videoidle"]);
     }),
+    ("NVIDIA power mode restores the previous user value", async () =>
+    {
+        NvidiaNative.SetPowerMode(0);
+        await Call("SetNvidiaPowerModeAsync", 1u, "gpu.maxperformance");
+        Equal(1u, NvidiaNative.Value); Equal(1, Pending().Length);
+        await Call("RevertAsync", "gpu.maxperformance");
+        Equal(0u, NvidiaNative.Value); Equal(true, NvidiaNative.UserSet); Equal(0, Pending().Length);
+    }),
+    ("NVIDIA power mode taken from the driver default is cleared on revert", async () =>
+    {
+        await Call("SetNvidiaPowerModeAsync", 1u, "gpu.maxperformance");
+        Equal(true, NvidiaNative.UserSet);
+        await Call("RevertAllAsync");
+        Equal(false, NvidiaNative.UserSet); Equal(5u, NvidiaNative.Value);
+    }),
+    ("NVIDIA power mode already set writes no journal", async () =>
+    {
+        NvidiaNative.SetPowerMode(1);
+        await Call("SetNvidiaPowerModeAsync", 1u, "gpu.maxperformance");
+        Equal(0, Pending().Length);
+    }),
+    ("A PC without an NVIDIA driver is refused before any journal", async () =>
+    {
+        NvidiaNative.Present = false;
+        await Throws(() => Call("SetNvidiaPowerModeAsync", 1u, "gpu.maxperformance"));
+        Equal(0, Pending().Length);
+    }),
+    ("A tampered NVIDIA journal value is rejected", async () =>
+    {
+        NvidiaNative.SetPowerMode(0);
+        await Call("SetNvidiaPowerModeAsync", 1u, "gpu.maxperformance");
+        var path = Pending().Single();
+        var json = JsonNode.Parse(File.ReadAllText(path))!;
+        json["Nvidia"]!["Previous"] = 99;
+        File.WriteAllText(path, json.ToJsonString());
+        await Throws(() => Call("RevertAllAsync"));
+        Equal(1u, NvidiaNative.Value); Equal(1, Pending().Length);
+    }),
     ("Journal data cannot inject a service command", async () =>
     {
         SeedService(2, 1);
