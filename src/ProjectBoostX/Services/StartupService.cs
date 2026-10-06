@@ -59,6 +59,8 @@ public static class StartupService
             foreach (var file in Directory.EnumerateFiles(directory))
             {
                 if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) continue;
+                // desktop.ini é configuração da pasta, não um programa que abre com o Windows.
+                if (Path.GetFileName(file).Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;
                 var legacy = file.EndsWith(".boostbak", StringComparison.OrdinalIgnoreCase);
                 var original = legacy ? file[..^9] : file;
                 items.Add(new StartupItem

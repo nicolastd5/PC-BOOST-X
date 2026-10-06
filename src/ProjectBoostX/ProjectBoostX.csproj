@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ProjectBoostX</AssemblyName>
     <RootNamespace>BoostParaPc</RootNamespace>
-    <Version>3.0.0</Version>
+    <Version>3.0.1</Version>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <Product>Project Boost X</Product>
     <AssemblyTitle>Project Boost X</AssemblyTitle>

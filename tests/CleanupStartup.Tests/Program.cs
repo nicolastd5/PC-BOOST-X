@@ -191,6 +191,17 @@ await Test("startup restore preserves conflicting new file and retains its backu
     await StartupService.EnableAsync(item);
     Assert(File.ReadAllText(file) == "original", "Retry could not restore original bytes.");
 });
+await Test("startup folder ignores desktop.ini", dir =>
+{
+    var folder = Path.Combine(dir, "startup");
+    Directory.CreateDirectory(folder);
+    File.WriteAllText(Path.Combine(folder, "desktop.ini"), "[.ShellClassInfo]");
+    File.WriteAllText(Path.Combine(folder, "app.lnk"), "shortcut");
+    var enumerate = typeof(StartupService).GetMethod("GetFolderItems", BindingFlags.Static | BindingFlags.NonPublic)!;
+    var names = ((IEnumerable<StartupItem>)enumerate.Invoke(null, [folder])!).Select(i => i.Name).ToList();
+    Assert(names.SequenceEqual(["app"]), "desktop.ini was listed as a startup program: " + string.Join(", ", names));
+    return Task.CompletedTask;
+});
 Console.WriteLine($"Failures: {failed}");
 return failed == 0 ? 0 : 1;
 

@@ -27,25 +27,25 @@
         </StackPanel>
 
         <!-- Filtros e presets -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,10" Padding="14">
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,10" Padding="14,12,14,6">
             <StackPanel>
                 <WrapPanel>
-                    <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Width="240" Margin="0,0,10,6"
+                    <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Width="220" Margin="0,0,10,6"
                              AutomationProperties.Name="Buscar otimização" ToolTip="Buscar por nome ou descrição" />
                     <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" DisplayMemberPath="Label"
                               Width="170" Margin="0,0,10,6" AutomationProperties.Name="Filtrar por categoria" />
                     <ComboBox ItemsSource="{Binding Risks}" SelectedItem="{Binding SelectedRisk}" DisplayMemberPath="Label"
                               Width="150" Margin="0,0,10,6" AutomationProperties.Name="Filtrar por risco" />
-                    <Button Content="Marcar preset Seguro" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding PresetSafeCommand}"
+                    <Button Content="Preset Seguro" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding PresetSafeCommand}"
                             ToolTip="Marca só os itens de risco Seguro indicados para este PC" />
-                    <Button Content="Marcar preset Equilibrado" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding PresetBalancedCommand}"
+                    <Button Content="Preset Equilibrado" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding PresetBalancedCommand}"
                             ToolTip="Marca itens Seguros e Moderados indicados para este PC. Nunca marca avançados" />
-                    <Button Content="Limpar marcação" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding ClearSelectionCommand}" />
-                    <Button Content="Aplicar selecionadas" Style="{StaticResource PrimaryButton}" Margin="0,0,0,6" Command="{Binding ApplySelectedCommand}" />
+                    <Button Content="Desmarcar" Style="{StaticResource SecondaryButton}" Margin="0,0,8,6" Command="{Binding ClearSelectionCommand}" />
+                    <Button Content="Aplicar selecionadas" Style="{StaticResource PrimaryButton}" Margin="0,0,10,6" Command="{Binding ApplySelectedCommand}" />
+                    <TextBlock Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,0,6">
+                        <Run Text="{Binding SelectedCount, Mode=OneWay}" /><Run Text=" marcadas" />
+                    </TextBlock>
                 </WrapPanel>
-                <TextBlock Style="{StaticResource MutedText}">
-                    <Run Text="{Binding SelectedCount, Mode=OneWay}" /><Run Text=" marcadas" />
-                </TextBlock>
             </StackPanel>
         </Border>
 

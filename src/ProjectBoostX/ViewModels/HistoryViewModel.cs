@@ -35,14 +35,29 @@ public partial class HistoryViewModel : ObservableObject, IScreen
     {
         var entries = await Task.Run(ActionLog.Read);
         Rows.Clear();
-        foreach (var entry in entries.Where(e => Filter == 0 || (Filter == 1) == e.Ok).Take(500))
+        // O tempo de abertura fica no log para suporte, mas não é uma ação do usuário.
+        foreach (var entry in entries.Where(e => e is not { ItemId: "app", Action: "inicio" })
+                     .Where(e => Filter == 0 || (Filter == 1) == e.Ok).Take(500))
         {
             var item = OptimizationCatalog.All.FirstOrDefault(i => i.Id == entry.ItemId);
-            Rows.Add(new HistoryRow(entry, item?.Name ?? entry.ItemId,
+            Rows.Add(new HistoryRow(entry, item?.Name ?? DisplayName(entry.ItemId),
                 CanRevert: item is { IsAction: false, State: ApplyState.Applied } && entry.Action == "aplicar" && entry.Ok));
         }
         Summary = Rows.Count == 0 ? "Nenhuma ação registrada ainda." : $"{Rows.Count} registros";
     }
+
+    /// <summary>Nome legível para ações que não são itens do catálogo.</summary>
+    private static string DisplayName(string id) => id switch
+    {
+        "app" => "Programa",
+        "session" => "Modo Jogo automático",
+        "cleanup" => "Limpeza de disco",
+        "appx.remove" => "Apps pré-instalados",
+        "jogo.unreal" => "Preset leve (Unreal Engine)",
+        "tools.dns" => "DNS",
+        _ when id.StartsWith("startup.", StringComparison.Ordinal) => "Inicialização: " + id["startup.".Length..],
+        _ => id
+    };
 
     [RelayCommand]
     private Task RevertAsync(HistoryRow? row) => _main.RunOperationAsync("Revertendo…", async () =>

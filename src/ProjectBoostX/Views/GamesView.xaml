@@ -80,6 +80,8 @@
             <!-- Painel do jogo -->
             <Border Grid.Column="1" Style="{StaticResource Card}" Width="340" Margin="14,0,0,0" VerticalAlignment="Top"
                     Visibility="{Binding HasSelectedGame, Converter={StaticResource BoolToVis}}">
+                <!-- O painel é mais alto que a janela mínima: rola por dentro em vez de cortar os botões. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
                 <StackPanel DataContext="{Binding SelectedGame}">
                     <Border Width="100" Height="140" CornerRadius="8" ClipToBounds="True" HorizontalAlignment="Left" Background="{StaticResource BgBrush}">
                         <Image Source="{Binding CoverPath, Converter={StaticResource PathToImage}}" Stretch="Uniform" />
@@ -135,6 +137,7 @@
                     <Button Content="Reverter este jogo" Style="{StaticResource DangerButton}" Margin="0,10,0,0"
                             Command="{Binding DataContext.RevertForSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </Grid>

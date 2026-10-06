@@ -180,6 +180,17 @@ var cases = new (string Name, Action<GameProfile> Test)[]
         Equal(0, RegistryKey.WriteCount);
         Require(game.Status != "—", "Missing executable failure was not exposed.");
     }),
+    ("Jogo conhecido recebe o seu perfil pelo nome; jogo desconhecido recebe o perfil geral", _ =>
+    {
+        Equal("openworld", GameProfileService.GuessProfile("DayZ"));
+        Equal("competitive", GameProfileService.GuessProfile("Counter-Strike 2"));
+        Equal("casual", GameProfileService.GuessProfile("The Sims 4"));
+        Equal("general", GameProfileService.GuessProfile("Deadside"));
+        var general = GameProfileService.GetRecommendation("general");
+        Require(!general.HighPriority && !general.Fso, "O perfil geral deve ser conservador.");
+        Require(!string.Join(" ", general.Tips).Contains("Minecraft"), "Dica de Minecraft em jogo desconhecido.");
+        Equal(general, GameProfileService.GetRecommendation("perfil-que-nao-existe"));
+    }),
     ("Unreal: o preset leve só baixa o que está acima do alvo e preserva o resto do arquivo", _ =>
     {
         var (text, changes) = UnrealIni.ApplyLightPreset(UnrealSample);

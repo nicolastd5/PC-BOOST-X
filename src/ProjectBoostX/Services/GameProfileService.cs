@@ -189,6 +189,17 @@ public static class GameProfileService
                 "Limpeza de RAM antes de sessões longas ajuda em 8 GB",
                 "Minecraft/Roblox: priorize GPU dedicada no Windows"
             ]),
+        // Jogo que o programa não conhece: só o que não tem contraindicação.
+        ["general"] = new(
+            "Perfil geral",
+            "GPU de alto desempenho para este jogo. Tela cheia e prioridade ficam como estão; ajuste em Opções manuais se quiser.",
+            Fso: false, Dpi: false, HighPriority: false, Gpu: true,
+            Tips:
+            [
+                "Jogo competitivo? Marque 'Prioridade alta' em Opções manuais",
+                "Atraso de entrada em tela cheia? Teste 'Tela cheia sem otimizações'",
+                "Mantenha o driver de vídeo atualizado (veja o Diagnóstico em Início)"
+            ]),
     };
 
     public static IReadOnlyList<GameProfile> DetectGames()
@@ -264,6 +275,8 @@ public static class GameProfileService
         catch { }
 
         if (file.Contains("Launcher", StringComparison.OrdinalIgnoreCase)) score -= 500;
+        // Executável de diagnóstico do desenvolvedor (DayZDiag_x64, arma3diag_x64), não o jogo.
+        if (file.Contains("Diag_", StringComparison.OrdinalIgnoreCase)) score -= 500;
         if (file.Contains("Shipping", StringComparison.OrdinalIgnoreCase)) score += 200;
         if (file.Contains("Client", StringComparison.OrdinalIgnoreCase)) score += 100;
         if (file.Contains("AntiCheat", StringComparison.OrdinalIgnoreCase) ||
@@ -272,7 +285,7 @@ public static class GameProfileService
     }
 
     public static GameRecommendation GetRecommendation(string profileKey)
-        => Profiles.TryGetValue(profileKey, out var r) ? r : Profiles["casual"];
+        => Profiles.TryGetValue(profileKey, out var r) ? r : Profiles["general"];
 
     public static string DescribeRecommendation(GameProfile g)
     {
@@ -664,8 +677,12 @@ public static class GameProfileService
         return hints.Any(h => name.Contains(h, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string GuessProfile(string name)
+    internal static string GuessProfile(string name)
     {
+        // Jogo conhecido encontrado por outro executável (iniciador, build de diagnóstico): vale o perfil do catálogo.
+        var known = KnownGames.Select(k => k.Split('|')).FirstOrDefault(k => k[1].Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (known is not null) return known[3];
+
         var n = name.ToLowerInvariant();
         if (n.Contains("counter") || n.Contains("valorant") || n.Contains("cs2") || n.Contains("fortnite")
             || n.Contains("apex") || n.Contains("warzone") || n.Contains("call of duty") || n.Contains("black ops")
@@ -678,7 +695,7 @@ public static class GameProfileService
             || n.Contains("starfield") || n.Contains("destiny") || n.Contains("baldur") || n.Contains("world")
             || n.Contains("racing") || n.Contains("forza") || n.Contains("souls"))
             return "openworld";
-        return "casual";
+        return "general";
     }
 
     public static void ApplyProfile(GameProfile game, bool useRecommendation = true)

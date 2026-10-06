@@ -93,7 +93,8 @@ public partial class CleanupViewModel : ObservableObject, IScreen
             var result = await CleanupService.CleanAsync(selected, progress, ct);
             LastResult = $"Liberado {CleanupService.FormatBytes(result.BytesFreed)} · {result.FilesRemoved} arquivos · {result.Errors} erros";
             ScanStatus = LastResult;
-            ActionLog.Write("cleanup", "limpar", result.Errors == 0, LastResult);
+            // Arquivos em uso são pulados e contam como "erros"; a limpeza só falhou se nada saiu.
+            ActionLog.Write("cleanup", "limpar", result.Errors == 0 || result.FilesRemoved > 0, LastResult);
             ct.ThrowIfCancellationRequested();
             await ScanTargetsAsync(ct);
             _main.StatusMessage = LastResult;
